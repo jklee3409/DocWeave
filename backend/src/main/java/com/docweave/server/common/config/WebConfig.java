@@ -1,4 +1,4 @@
-package com.docweave.server.config;
+package com.docweave.server.common.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
