@@ -1,18 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. AI Model (Ollama)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: docweave-ai-model
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./ollama_data:/root/.ollama
-    networks:
-      - docweave-net
-
-  # 2. Vector Storage (PostgreSQL + pgvector)
+  # 1. Vector Storage (PostgreSQL + pgvector)
   postgres:
     image: pgvector/pgvector:pg16
     container_name: docweave-db
@@ -27,7 +16,7 @@ services:
     networks:
       - docweave-net
 
-  # 3. Redis
+  # 2. Redis
   redis:
     image: redis:alpine
     container_name: docweave-redis

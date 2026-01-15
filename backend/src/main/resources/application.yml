@@ -5,7 +5,7 @@ spring:
   # DB
   datasource:
     url: jdbc:postgresql://localhost:5433/docweave
-    username: pstgres
+    username: postgres
     password: dlwhdrb1234
     driver-class-name: org.postgresql.Driver
 
@@ -22,7 +22,7 @@ spring:
     ollama:
       base-url: http://localhost:11434
       chat:
-        model: llama3.2
+        model: llama3.2:1b
         options:
           temperature: 0.7
 
