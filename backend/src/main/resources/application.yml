@@ -2,6 +2,12 @@ spring:
   application:
     name: docweave-api
 
+  # Servlet
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
   # DB
   datasource:
     url: jdbc:postgresql://localhost:5433/docweave
