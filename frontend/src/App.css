@@ -1,42 +1,96 @@
-#root {
-  max-width: 1280px;
+/* 전체 레이아웃 */
+.container {
+  max-width: 800px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* 헤더 & 업로드 섹션 */
+header {
   text-align: center;
+  margin-bottom: 30px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.upload-section {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px dashed #ccc;
+  text-align: center;
+  margin-bottom: 20px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* 채팅 영역 */
+.chat-window {
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.messages-area {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #f5f7fb;
 }
 
-.card {
-  padding: 2em;
+/* 말풍선 스타일 */
+.message {
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  border-radius: 15px;
+  max-width: 70%;
+  line-height: 1.5;
+  font-size: 15px;
 }
 
-.read-the-docs {
-  color: #888;
+.user-message {
+  background-color: #007bff;
+  color: white;
+  margin-left: auto; /* 오른쪽 정렬 */
+  border-bottom-right-radius: 2px;
+}
+
+.ai-message {
+  background-color: white;
+  color: #333;
+  margin-right: auto; /* 왼쪽 정렬 */
+  border: 1px solid #ddd;
+  border-bottom-left-radius: 2px;
+}
+
+/* 입력창 영역 */
+.input-area {
+  display: flex;
+  padding: 15px;
+  border-top: 1px solid #eee;
+}
+
+input[type="text"] {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 25px;
+  outline: none;
+  font-size: 16px;
+}
+
+button.send-btn {
+  margin-left: 10px;
+  padding: 10px 25px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button.send-btn:disabled {
+  background-color: #ccc;
 }
