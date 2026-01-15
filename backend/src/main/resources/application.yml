@@ -25,6 +25,14 @@ spring:
         model: llama3.2:1b
         options:
           temperature: 0.7
+      embedding:
+        model: nomic-embed-text
+
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: hnsw
+        dimensions: 768
 
 server:
   port: 8080
