@@ -1,245 +1,311 @@
-/* 1. Global Reset & Font */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* 1. Reset & Global Layout */
+:root {
+  width: 100%;
+  height: 100%;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: #f9f9f9; /* 아주 연한 회색 배경 */
-  color: #333;
-  height: 100vh;
-  overflow: hidden; /* 전체 스크롤 방지 */
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  background-color: #ffffff; /* 깔끔한 화이트 배경 */
+  color: #1f2937;
+  overflow: hidden; /* 이중 스크롤 방지 */
+  /* 중요: 기존 레이아웃 간섭 속성 초기화 */
+  display: block;
+  place-items: unset;
 }
 
-/* 2. Main Layout (Center Alignment) */
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* 2. App Container (화면 전체 사용) */
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  max-width: 1000px; /* 중앙 정렬 최대 너비 */
-  margin: 0 auto;
-  background-color: #fff;
-  box-shadow: 0 0 20px rgba(0,0,0,0.05); /* 은은한 그림자 */
+  width: 100%;
   position: relative;
+  background-color: #ffffff;
 }
 
 /* 3. Header */
 .app-header {
-  padding: 20px;
-  border-bottom: 1px solid #eee;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  padding: 0 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
   z-index: 10;
+  background: rgba(255, 255, 255, 0.8); /* 반투명 헤더 */
+  backdrop-filter: blur(10px);
 }
 
 .brand {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  color: #222;
+  color: #374151;
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.brand span {
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* 4. Chat Area (Scrollable) */
+/* 4. Chat Feed (중앙 정렬 핵심) */
 .chat-feed {
   flex: 1;
-  padding: 20px 40px;
-  overflow-y: auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: center; /* 자식 요소(메시지 리스트)를 가로 중앙 정렬 */
+  overflow-y: auto; /* 세로 스크롤 허용 */
+  padding-top: 70px; /* 헤더 공간 확보 */
+  padding-bottom: 160px; /* 입력창 공간 확보 */
   scroll-behavior: smooth;
 }
 
-/* 5. Message Bubbles */
-.message-row {
-  display: flex;
-  gap: 15px;
+/* 4-1. Empty State (화면 정중앙) */
+.empty-state {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  animation: fadeIn 0.5s ease-out;
+  color: #374151;
 }
 
-.message-row.user {
-  justify-content: flex-end;
+.logo-large {
+  font-size: 3.5rem;
+  color: #4f46e5;
+  margin-bottom: 20px;
+}
+
+.empty-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.empty-desc {
+  font-size: 1.1rem;
+  color: #6b7280;
+  max-width: 500px;
+  line-height: 1.6;
+}
+
+/* 4-2. Message List (넓은 폭 적용) */
+.message-list {
+  width: 100%;
+  max-width: 1000px; /* [수정] 768px -> 1000px (더 넓게!) */
+  padding: 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.message-row {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  animation: slideIn 0.2s ease-out;
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
   flex-shrink: 0;
+  font-size: 1.2rem;
+  border: 1px solid #e5e7eb;
 }
 
 .avatar.ai {
-  background-color: #e0e7ff; /* 연한 파랑 */
+  background-color: #fff;
   color: #4f46e5;
 }
 
 .avatar.user {
-  background-color: #f3f4f6;
-  color: #4b5563;
-  display: none; /* 사용자 아이콘은 보통 생략하거나 표시 */
-}
-
-.message-bubble {
-  padding: 12px 20px;
-  border-radius: 12px;
-  max-width: 80%;
-  line-height: 1.6;
-  font-size: 0.95rem;
-  position: relative;
-}
-
-.message-row.user .message-bubble {
-  background-color: #4f46e5; /* 쨍한 파란색 */
-  color: white;
-  border-radius: 12px 12px 2px 12px;
-}
-
-.message-row.ai .message-bubble {
-  background-color: #f3f4f6; /* 회색 */
-  color: #1f2937;
-  border-radius: 12px 12px 12px 2px;
-}
-
-/* 6. Markdown Styling (핵심!) */
-.markdown-content p {
-  margin-bottom: 0.8em;
-}
-.markdown-content p:last-child {
-  margin-bottom: 0;
-}
-.markdown-content strong {
-  font-weight: 700;
-  color: inherit; /* 부모 색상 따름 */
-}
-.markdown-content ul, .markdown-content ol {
-  margin-left: 20px;
-  margin-bottom: 10px;
-}
-.markdown-content li {
-  margin-bottom: 5px;
-}
-.markdown-content code {
-  background-color: rgba(0,0,0,0.1);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9em;
-}
-.markdown-content pre {
-  background-color: #2d2d2d;
-  color: #fff;
-  padding: 15px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 10px 0;
-}
-.markdown-content pre code {
-  background-color: transparent;
-  color: inherit;
-}
-.markdown-content h1, .markdown-content h2, .markdown-content h3 {
-  margin-top: 15px;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-/* 7. Input Area (Fixed Bottom) */
-.input-container {
-  padding: 20px 40px;
-  background-color: #fff;
-  border-top: 1px solid #f0f0f0;
-}
-
-.upload-area {
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.upload-btn-label {
-  cursor: pointer;
-  background-color: #f0f4f8;
-  padding: 6px 12px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: 0.2s;
-  font-weight: 600;
-  color: #4f46e5;
-}
-
-.upload-btn-label:hover {
-  background-color: #e0e7ff;
-}
-
-.input-box {
-  display: flex;
-  align-items: center;
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 12px; /* 둥근 입력창 */
-  padding: 5px 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  transition: border-color 0.2s;
-}
-
-.input-box:focus-within {
-  border-color: #4f46e5;
-}
-
-.input-box textarea {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 12px;
-  resize: none; /* 크기 조절 방지 */
-  font-family: inherit;
-  font-size: 1rem;
-  max-height: 100px;
-  height: 50px; /* 기본 높이 */
-}
-
-.send-btn {
   background-color: #4f46e5;
   color: white;
   border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+}
+
+.message-content {
+  flex: 1;
+  /* 메시지 내용이 너무 길어도 레이아웃 유지 */
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  color: #111827;
+}
+
+/* 5. Input Container (하단 중앙 플로팅 & 넓게) */
+.input-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 30px 20px;
+  /* 그라데이션으로 자연스럽게 처리 */
+  background: linear-gradient(to top, #ffffff 80%, rgba(255,255,255,0));
+  display: flex;
+  justify-content: center; /* 입력창 중앙 정렬 */
+  align-items: flex-end;
+  z-index: 20;
+}
+
+.input-wrapper {
+  width: 100%;
+  max-width: 1000px; /* [수정] 입력창도 1000px로 넓게 */
+  background: #f3f4f6; /* 연한 회색 배경 (ChatGPT 스타일) */
+  border-radius: 16px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  box-shadow: 0 0 0 1px transparent;
+  transition: all 0.2s;
+}
+
+.input-wrapper:focus-within {
+  background: #fff;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05), 0 0 0 1px #e5e7eb;
+}
+
+.file-btn {
+  width: 36px;
+  height: 36px;
+  color: #6b7280;
   cursor: pointer;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: 0.2s;
-  margin-left: 5px;
+  background: transparent;
+  border: none;
 }
 
-.send-btn:hover {
-  background-color: #4338ca;
+.file-btn:hover {
+  background-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.file-btn.active {
+  color: #4f46e5;
+  background-color: #e0e7ff;
+}
+
+textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 8px 0;
+  max-height: 200px;
+  min-height: 24px;
+  color: #1f2937;
+}
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  background-color: transparent;
+  color: #4f46e5; /* 전송 버튼 파란색 */
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s;
 }
 
 .send-btn:disabled {
-  background-color: #cbd5e1;
-  cursor: not-allowed;
+  color: #d1d5db;
+  cursor: default;
+}
+
+.send-btn:not(:disabled):hover {
+  background-color: #e0e7ff;
+}
+
+/* 6. Markdown Style Refinement */
+.markdown-content {
+  line-height: 1.7;
+  font-size: 1.05rem; /* 글자 크기 약간 키움 */
+  color: #374151;
+}
+.markdown-content p { margin-bottom: 1em; }
+.markdown-content strong { color: #111827; font-weight: 700; }
+.markdown-content ul, .markdown-content ol { margin-left: 24px; margin-bottom: 1em; }
+.markdown-content li { margin-bottom: 0.5em; }
+.markdown-content pre {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 16px;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 16px 0;
+  font-size: 0.95em;
+}
+.markdown-content code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Menlo', 'Monaco', monospace;
+  font-size: 0.9em;
+  color: #ea580c;
+}
+.markdown-content pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+/* 7. Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loading-dots { font-size: 0.9rem; color: #6b7280; }
+.loading-dots:after {
+  content: '.';
+  animation: dots 1.5s steps(5, end) infinite;
+}
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
 }

@@ -1,28 +1,32 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import ReactMarkdown from 'react-markdown'; // 마크다운 렌더러
-import remarkGfm from 'remark-gfm'; // 테이블, 리스트 등 지원
-import { FaPaperPlane, FaFileUpload, FaRobot, FaUser } from 'react-icons/fa'; // 아이콘
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser } from 'react-icons/fa';
 import './App.css';
 
 function App() {
-    const [messages, setMessages] = useState([
-        {
-            role: 'ai',
-            content: '**안녕하세요! DocWeave 입니다.** 👋\n\nPDF 문서를 업로드하시면 내용을 분석하여 답변해 드립니다.\n문서의 요약, 특정 정보 검색 등 무엇이든 물어보세요!'
-        }
-    ]);
+    const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [file, setFile] = useState(null);
 
     const messagesEndRef = useRef(null);
-    const fileInputRef = useRef(null); // 파일 인풋 제어용
+    const fileInputRef = useRef(null);
+    const textareaRef = useRef(null);
 
     // 스크롤 자동 이동
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [messages, isLoading]);
+
+    // 입력창 높이 자동 조절 (엔터 칠 때마다 늘어남)
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto'; // 높이 초기화
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`; // 최대 200px까지 늘어남
+        }
+    }, [input]);
 
     const handleUpload = async (e) => {
         const selectedFile = e.target.files[0];
@@ -33,18 +37,17 @@ function App() {
         formData.append('file', selectedFile);
 
         setIsLoading(true);
-        // 업로드 시작 메시지 (UX)
-        setMessages(prev => [...prev, { role: 'ai', content: `📂 **${selectedFile.name}** 문서를 분석하고 있습니다... 잠시만 기다려주세요.` }]);
+        addMessage('ai', `📂 **${selectedFile.name}** 분석 중입니다... 잠시만 기다려주세요.`);
 
         try {
             await axios.post('http://localhost:8080/api/doc/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-
-            setMessages(prev => [...prev, { role: 'ai', content: '✅ **분석이 완료되었습니다!** 이제 문서 내용에 대해 자유롭게 질문해주세요.' }]);
+            addMessage('ai', `✅ **${selectedFile.name}** 분석 완료! \n이 문서에 대해 궁금한 점을 물어보세요.`);
         } catch (error) {
             console.error(error);
-            setMessages(prev => [...prev, { role: 'ai', content: '❌ **업로드 실패:** 서버에 연결할 수 없거나 파일이 너무 큽니다.' }]);
+            addMessage('ai', '❌ **업로드 실패:** 파일을 처리하는 중 오류가 발생했습니다.');
+            setFile(null);
         } finally {
             setIsLoading(false);
         }
@@ -54,26 +57,34 @@ function App() {
         if (!input.trim()) return;
 
         const userMessage = input;
-        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setInput('');
+        setInput(''); // 입력창 초기화
+        addMessage('user', userMessage);
         setIsLoading(true);
+
+        // 전송 후 입력창 높이 리셋
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+        }
 
         try {
             const res = await axios.post('http://localhost:8080/api/doc/chat', {
                 message: userMessage
             });
-
-            setMessages(prev => [...prev, { role: 'ai', content: res.data.answer }]);
+            addMessage('ai', res.data.data.answer); // 백엔드 응답 구조 반영
         } catch (error) {
             console.error(error);
-            setMessages(prev => [...prev, { role: 'ai', content: '⚠️ **오류 발생:** AI 응답을 받아오지 못했습니다.' }]);
+            addMessage('ai', '⚠️ **오류 발생:** AI 응답을 받아오지 못했습니다. 잠시 후 다시 시도해주세요.');
         } finally {
             setIsLoading(false);
         }
     };
 
+    const addMessage = (role, content) => {
+        setMessages(prev => [...prev, { role, content }]);
+    };
+
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { // Shift+Enter는 줄바꿈
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
         }
@@ -81,78 +92,92 @@ function App() {
 
     return (
         <div className="app-container">
-            {/* 1. 헤더 */}
+            {/* 1. Header */}
             <header className="app-header">
-                <div className="brand">
-                    <FaRobot size={28} color="#4f46e5" />
+                <div className="brand" onClick={() => window.location.reload()}>
+                    <FaBrain size={28} color="#4f46e5" />
                     <span>DocWeave</span>
                 </div>
             </header>
 
-            {/* 2. 채팅 영역 */}
+            {/* 2. Chat Feed */}
             <div className="chat-feed">
-                {messages.map((msg, index) => (
-                    <div key={index} className={`message-row ${msg.role}`}>
-                        {msg.role === 'ai' && (
-                            <div className="avatar ai">
-                                <FaRobot />
+                {messages.length === 0 ? (
+                    /* Empty State (정중앙) */
+                    <div className="empty-state">
+                        <FaBrain className="logo-large" />
+                        <h1 className="empty-title">무엇을 도와드릴까요?</h1>
+                        <p className="empty-desc">
+                            PDF 문서를 업로드하고 AI와 대화하며 인사이트를 얻으세요.<br/>
+                        </p>
+                    </div>
+                ) : (
+                    /* Chat List (넓게 중앙 정렬) */
+                    <div className="message-list">
+                        {messages.map((msg, index) => (
+                            <div key={index} className="message-row">
+                                <div className={`avatar ${msg.role}`}>
+                                    {msg.role === 'ai' ? <FaRobot /> : <FaUser size={14} />}
+                                </div>
+                                <div className="message-content">
+                                    <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
+                                    <div className="markdown-content">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {msg.content}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {isLoading && (
+                            <div className="message-row">
+                                <div className="avatar ai"><FaRobot /></div>
+                                <div className="message-content">
+                                    <span className="loading-dots">답변 생성 중</span>
+                                </div>
                             </div>
                         )}
-
-                        <div className="message-bubble">
-                            <div className="markdown-content">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {msg.content}
-                                </ReactMarkdown>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                {isLoading && (
-                    <div className="message-row ai">
-                        <div className="avatar ai"><FaRobot /></div>
-                        <div className="message-bubble">
-                            <span className="loading-dots">Thinking...</span>
-                        </div>
+                        <div ref={messagesEndRef} />
                     </div>
                 )}
-                <div ref={messagesEndRef} />
             </div>
 
-            {/* 3. 입력 영역 (Sticky Bottom) */}
+            {/* 3. Input Area (넓게 중앙 정렬) */ }
             <div className="input-container">
-                {/* 파일 업로드 버튼 */}
-                <div className="upload-area">
+                <div className="input-wrapper">
                     <input
                         type="file"
                         accept=".pdf"
                         ref={fileInputRef}
                         onChange={handleUpload}
-                        style={{ display: 'none' }} // 기본 인풋 숨김
+                        style={{ display: 'none' }}
                     />
                     <button
-                        className="upload-btn-label"
+                        className={`file-btn ${file ? 'active' : ''}`}
                         onClick={() => fileInputRef.current.click()}
+                        title="PDF 파일 업로드"
                         disabled={isLoading}
                     >
-                        <FaFileUpload />
-                        {file ? '다른 파일 선택' : 'PDF 문서 업로드'}
+                        <FaPlus />
                     </button>
-                    {file && <span>{file.name}</span>}
-                </div>
 
-                {/* 텍스트 입력창 */}
-                <div className="input-box">
-          <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="문서 내용에 대해 질문하세요... (Enter 전송)"
-              disabled={isLoading}
-          />
-                    <button className="send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
-                        <FaPaperPlane />
+                    <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder={file ? "이 문서에 대해 궁금한 점을 입력하세요..." : "먼저 + 버튼을 눌러 PDF를 업로드하세요"}
+                        disabled={isLoading}
+                        rows={1}
+                    />
+
+                    <button
+                        className="send-btn"
+                        onClick={handleSend}
+                        disabled={isLoading || !input.trim()}
+                    >
+                        <FaPaperPlane size={16} />
                     </button>
                 </div>
             </div>
