@@ -1,6 +1,6 @@
-package com.docweave.server.rag.controller;
+package com.docweave.server.doc.controller;
 
-import com.docweave.server.rag.service.RagService;
+import com.docweave.server.doc.service.RagService;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

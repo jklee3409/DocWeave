@@ -1,4 +1,4 @@
-package com.docweave.server.rag.service;
+package com.docweave.server.doc.service;
 
 import org.springframework.web.multipart.MultipartFile;
 

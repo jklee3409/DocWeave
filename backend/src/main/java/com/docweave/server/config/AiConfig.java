@@ -1,4 +1,4 @@
-package com.docweave.server.common.config;
+package com.docweave.server.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Bean;

@@ -1,4 +1,4 @@
-package com.docweave.server.rag.service;
+package com.docweave.server.doc.service;
 
 import java.util.List;
 import java.util.Map;
