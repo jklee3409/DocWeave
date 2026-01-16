@@ -1,8 +1,10 @@
 package com.docweave.server.doc.controller;
 
+import com.docweave.server.common.dto.BaseResponseDto;
+import com.docweave.server.doc.dto.request.ChatRequestDto;
+import com.docweave.server.doc.dto.response.ChatResponseDto;
+import com.docweave.server.doc.dto.response.UploadResponseDto;
 import com.docweave.server.doc.service.RagService;
-import java.util.Map;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,24 +23,14 @@ public class DocController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, String>> upload(@RequestParam("file") MultipartFile file) {
-        try {
-            ragService.uploadPdf(file);
-            return ResponseEntity.ok(Map.of("message", "문서가 성공적으로 학습되었습니다."));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("error", "업로드 실패: " + e.getMessage()));
-        }
+    public BaseResponseDto<UploadResponseDto> upload(@RequestParam("file") MultipartFile file) {
+        UploadResponseDto result = ragService.uploadPdf(file);
+        return BaseResponseDto.success(result);
     }
 
     @PostMapping("/chat")
-    public ResponseEntity<Map<String, String>> chat(@RequestBody Map<String, String> request) {
-        String question = request.get("message");
-        String answer = ragService.ask(question);
-
-        return ResponseEntity.ok(Map.of(
-                "question", question,
-                "answer", answer
-        ));
+    public BaseResponseDto<ChatResponseDto> chat(@RequestBody ChatRequestDto requestDto) {
+        ChatResponseDto result = ragService.ask(requestDto);
+        return BaseResponseDto.success(result);
     }
 }
