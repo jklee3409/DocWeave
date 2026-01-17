@@ -5,7 +5,6 @@ import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
 import com.docweave.server.doc.dto.response.ChatResponseDto;
-import com.docweave.server.doc.dto.response.UploadResponseDto;
 import com.docweave.server.doc.entity.ChatDocument;
 import com.docweave.server.doc.entity.ChatMessage;
 import com.docweave.server.doc.entity.ChatRoom;
@@ -17,7 +16,6 @@ import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -135,7 +133,7 @@ public class RagServiceImpl implements RagService {
             List<Document> similarDocuments = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(requestDto.getMessage())
-                            .topK(3)
+                            .topK(5)
                             .filterExpression("roomId == " + roomId) // 필터링
                             .build()
             );
@@ -183,7 +181,7 @@ public class RagServiceImpl implements RagService {
             Resource resource = file.getResource();
             PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
             List<Document> documents = pdfReader.get();
-            TokenTextSplitter splitter = new TokenTextSplitter();
+            TokenTextSplitter  splitter = new TokenTextSplitter();
             List<Document> splitDocuments = splitter.apply(documents);
 
             // 기존 방 번호(roomId)를 그대로 태깅
