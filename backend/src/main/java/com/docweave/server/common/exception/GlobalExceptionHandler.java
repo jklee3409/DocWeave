@@ -3,6 +3,7 @@ package com.docweave.server.common.exception;
 import com.docweave.server.common.dto.BaseResponseDto;
 import com.docweave.server.common.dto.ErrorResponseDto;
 import com.docweave.server.doc.exception.AiProcessingException;
+import com.docweave.server.doc.exception.ChatRoomFindingException;
 import com.docweave.server.doc.exception.FileHandlingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -29,6 +30,12 @@ public class GlobalExceptionHandler {
     public BaseResponseDto<ErrorResponseDto> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         log.error("File Size Exceeded: {}", e.getMessage());
         return BaseResponseDto.fail(ErrorCode.FILE_SIZE_EXCEEDED);
+    }
+
+    @ExceptionHandler(ChatRoomFindingException.class)
+    public BaseResponseDto<ErrorResponseDto> handleFindingChatRoomException(ChatRoomFindingException e) {
+        log.error("Can Not Found ChatRoom: {}", e.getMessage());
+        return BaseResponseDto.fail(e.getErrorCode());
     }
 
     @ExceptionHandler(Exception.class)
