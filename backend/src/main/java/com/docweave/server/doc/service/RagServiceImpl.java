@@ -153,7 +153,7 @@ public class RagServiceImpl implements RagService {
             List<Document> similarChildren = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(requestDto.getMessage())
-                            .topK(5)
+                            .topK(3)
                             .filterExpression("roomId == " + roomId)
                             .build()
             );
