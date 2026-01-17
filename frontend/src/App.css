@@ -74,22 +74,53 @@ body {
   gap: 4px;
 }
 
+/* 채팅방 항목 스타일 수정 (삭제 버튼 포함) */
 .room-item {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 0.9rem;
   color: #374151;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: 0.2s;
   display: flex;
   align-items: center;
   gap: 10px;
+  transition: 0.2s;
+  position: relative; /* 삭제 버튼 배치를 위해 */
 }
 .room-item:hover { background-color: #e5e7eb; }
 .room-item.active { background-color: #e0e7ff; color: #4f46e5; font-weight: 600; }
+
+.room-item-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 삭제 버튼 (평소엔 숨김) */
+.delete-room-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0; /* 숨김 */
+  transition: all 0.2s;
+}
+
+/* 마우스 올렸을 때 삭제 버튼 보임 */
+.room-item:hover .delete-room-btn {
+  opacity: 1;
+}
+
+.delete-room-btn:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
 
 /* 3. Main Content (Right) */
 .main-content {
@@ -99,7 +130,7 @@ body {
   position: relative;
   background-color: #ffffff;
   height: 100vh;
-  min-width: 0; /* Flexbox overflow 방지 */
+  min-width: 0;
 }
 
 /* 4. Header */
@@ -142,7 +173,7 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center; /* [중요] 메시지 가로 중앙 정렬 */
+  align-items: center; /* 메시지 중앙 정렬 */
   overflow-y: auto;
   padding-top: 70px;
   padding-bottom: 160px;
@@ -170,7 +201,7 @@ body {
 /* Message List */
 .message-list {
   width: 100%;
-  max-width: 900px; /* [중요] 채팅창 최대 너비 설정 */
+  max-width: 900px;
   padding: 20px 30px;
   display: flex;
   flex-direction: column;
@@ -219,7 +250,7 @@ body {
 
 .input-wrapper {
   width: 100%;
-  max-width: 900px; /* 입력창 너비도 메시지와 동일하게 */
+  max-width: 900px;
   background: #f3f4f6;
   border-radius: 16px;
   padding: 12px 16px;
