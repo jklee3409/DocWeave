@@ -28,7 +28,7 @@ spring:
     ollama:
       base-url: http://localhost:11434
       chat:
-        model: llama3.2
+        model: mistral
         options:
           temperature: 0.1
           top-p: 0.9
