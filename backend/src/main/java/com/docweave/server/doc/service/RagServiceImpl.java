@@ -1,11 +1,20 @@
 package com.docweave.server.doc.service;
 
 import com.docweave.server.common.exception.ErrorCode;
+import com.docweave.server.doc.dto.ChatMessageDto;
+import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
 import com.docweave.server.doc.dto.response.ChatResponseDto;
 import com.docweave.server.doc.dto.response.UploadResponseDto;
+import com.docweave.server.doc.entity.ChatDocument;
+import com.docweave.server.doc.entity.ChatMessage;
+import com.docweave.server.doc.entity.ChatRoom;
 import com.docweave.server.doc.exception.AiProcessingException;
+import com.docweave.server.doc.exception.ChatRoomFindingException;
 import com.docweave.server.doc.exception.FileHandlingException;
+import com.docweave.server.doc.repository.ChatDocumentRepository;
+import com.docweave.server.doc.repository.ChatMessageRepository;
+import com.docweave.server.doc.repository.ChatRoomRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -23,6 +32,7 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
@@ -32,61 +42,119 @@ public class RagServiceImpl implements RagService {
 
     private final VectorStore vectorStore;
     private final ChatClient chatClient;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final ChatDocumentRepository chatDocumentRepository;
 
     @Override
-    public UploadResponseDto uploadPdf(MultipartFile file) {
-        if (file.isEmpty()) throw new FileHandlingException(ErrorCode.FILE_EMPTY);
+    @Transactional(readOnly = true)
+    public List<ChatRoomDto> getChatRooms() {
+        return chatRoomRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(room -> ChatRoomDto.builder()
+                        .id(room.getId())
+                        .title(room.getTitle())
+                        .createdAt(room.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
+    }
 
-        if (!Objects.requireNonNull(file.getOriginalFilename()).toLowerCase().endsWith(".pdf")) throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
+    @Override
+    @Transactional(readOnly = true)
+    public List<ChatMessageDto> getChatMessages(Long roomId) {
+        return chatMessageRepository.findAllByChatRoomIdOrderByCreatedAtAsc(roomId).stream()
+                .map(msg -> ChatMessageDto.builder()
+                        .role(msg.getRole().name().toLowerCase())
+                        .content(msg.getContent())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ChatRoomDto createChatRoom(MultipartFile file) {
+        if (file.isEmpty()) throw new FileHandlingException(ErrorCode.FILE_EMPTY);
+        if (!file.getOriginalFilename().toLowerCase().endsWith(".pdf")) throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
 
         try {
+            // DB에 채팅방 생성
+            ChatRoom chatRoom = chatRoomRepository.save(ChatRoom.builder()
+                    .title(file.getOriginalFilename())
+                    .build());
+
+            // PDF 파싱
             Resource resource = file.getResource();
             PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
             List<Document> documents = pdfReader.get();
 
             if (documents.isEmpty()) throw new FileHandlingException(ErrorCode.DOCUMENT_PARSING_ERROR);
 
+            // 문서 스플릿 및 메타데이터(roomId) 추가
             TokenTextSplitter splitter = new TokenTextSplitter();
             List<Document> splitDocuments = splitter.apply(documents);
 
+            // 모든 문서 조각에 roomId를 태깅하여 저장
+            for (Document doc : splitDocuments) {
+                doc.getMetadata().put("roomId", chatRoom.getId());
+            }
+
             vectorStore.add(splitDocuments);
 
-            return UploadResponseDto.builder()
-                    .fileName(file.getOriginalFilename())
-                    .message("문서가 성공적으로 학습되었습니다.")
+            // 첫 안내 메시지 저장
+            chatMessageRepository.save(ChatMessage.builder()
+                    .chatRoom(chatRoom)
+                    .role(ChatMessage.MessageRole.AI)
+                    .content("📂 **" + file.getOriginalFilename() + "** 분석이 완료되었습니다.\n질문해주세요!")
+                    .build());
+
+            return ChatRoomDto.builder()
+                    .id(chatRoom.getId())
+                    .title(chatRoom.getTitle())
+                    .createdAt(chatRoom.getCreatedAt())
                     .build();
 
         } catch (Exception e) {
-            log.error("PDF Parsing Error", e);
+            log.error("Room Creation Error", e);
             throw new FileHandlingException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
 
     @Override
-    public ChatResponseDto ask(ChatRequestDto requestDto) {
+    public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
+
+        // 사용자 질문 DB 저장
+        chatMessageRepository.save(ChatMessage.builder()
+                .chatRoom(chatRoom)
+                .role(ChatMessage.MessageRole.USER)
+                .content(requestDto.getMessage())
+                .build());
+
         try {
-            // 1. 유사도 검색
+            // 벡터 검색 (roomId가 일치하는 문서만 검색)
+            // Filter Expression: "roomId == 123"
             List<Document> similarDocuments = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(requestDto.getMessage())
                             .topK(3)
+                            .filterExpression("roomId == " + roomId) // 필터링
                             .build()
             );
 
-            // 2. 컨텍스트 조합
-            String context = similarDocuments.stream()
-                    .map(Document::getText)
-                    .collect(Collectors.joining("\n"));
+            String context = similarDocuments.isEmpty() ? "" :
+                    similarDocuments.stream().map(Document::getText).collect(Collectors.joining("\n"));
 
-            // 3. 프롬프트 생성
+            // 프롬포트 생성
             PromptTemplate template = getPromptTemplate();
-            Prompt prompt = template.create(Map.of(
-                    "context", context,
-                    "message", requestDto.getMessage()
-            ));
+            Prompt prompt = template.create(Map.of("context", context, "message", requestDto.getMessage()));
 
-            // 4. AI 호출
+            // AI 응답 생성 및 저장
             String aiAnswer = chatClient.prompt(prompt).call().content();
+
+            chatMessageRepository.save(ChatMessage.builder()
+                    .chatRoom(chatRoom)
+                    .role(ChatMessage.MessageRole.AI)
+                    .content(aiAnswer)
+                    .build());
 
             return ChatResponseDto.builder()
                     .question(requestDto.getMessage())
@@ -94,8 +162,45 @@ public class RagServiceImpl implements RagService {
                     .build();
 
         } catch (Exception e) {
-            log.error("AI Inference Error", e);
+            log.error("AI Error", e);
             throw new AiProcessingException(ErrorCode.AI_SERVICE_ERROR);
+        }
+    }
+
+    @Override
+    public void addDocumentToRoom(Long roomId, MultipartFile file) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
+
+        // 파일 정보 DB 저장
+        chatDocumentRepository.save(ChatDocument.builder()
+                .chatRoom(chatRoom)
+                .fileName(file.getOriginalFilename())
+                .build());
+
+        // PDF 파싱 및 벡터 저장
+        try {
+            Resource resource = file.getResource();
+            PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
+            List<Document> documents = pdfReader.get();
+            TokenTextSplitter splitter = new TokenTextSplitter();
+            List<Document> splitDocuments = splitter.apply(documents);
+
+            // 기존 방 번호(roomId)를 그대로 태깅
+            for (Document doc : splitDocuments) {
+                doc.getMetadata().put("roomId", chatRoom.getId());
+            }
+            vectorStore.add(splitDocuments);
+
+            // 시스템 메시지 추가 (사용자에게 알림)
+            chatMessageRepository.save(ChatMessage.builder()
+                    .chatRoom(chatRoom)
+                    .role(ChatMessage.MessageRole.AI)
+                    .content("📎 **" + file.getOriginalFilename() + "** 문서가 추가되었습니다.")
+                    .build());
+
+        } catch (Exception e) {
+            throw new FileHandlingException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
 

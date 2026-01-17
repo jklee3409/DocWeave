@@ -1,11 +1,16 @@
 package com.docweave.server.doc.service;
 
+import com.docweave.server.doc.dto.ChatMessageDto;
+import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
 import com.docweave.server.doc.dto.response.ChatResponseDto;
-import com.docweave.server.doc.dto.response.UploadResponseDto;
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface RagService {
-    UploadResponseDto uploadPdf(MultipartFile multipartFile);
-    ChatResponseDto ask(ChatRequestDto requestDto);
+    List<ChatRoomDto> getChatRooms();
+    List<ChatMessageDto> getChatMessages(Long roomId);
+    ChatRoomDto createChatRoom(MultipartFile file);
+    ChatResponseDto ask(Long roomId, ChatRequestDto requestDto);
+    void addDocumentToRoom(Long roomId, MultipartFile file);
 }
