@@ -9,6 +9,7 @@ import com.docweave.server.doc.dto.response.UploadResponseDto;
 import com.docweave.server.doc.service.RagService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +53,12 @@ public class DocController {
             @PathVariable Long roomId,
             @RequestParam("file") MultipartFile file) {
         ragService.addDocumentToRoom(roomId, file);
+        return BaseResponseDto.voidSuccess();
+    }
+
+    @DeleteMapping("/rooms/{roomId}")
+    public BaseResponseDto<Void> deleteRoom(@PathVariable Long roomId) {
+        ragService.deleteChatRoom(roomId);
         return BaseResponseDto.voidSuccess();
     }
 }

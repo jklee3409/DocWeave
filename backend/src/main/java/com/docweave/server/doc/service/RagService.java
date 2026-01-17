@@ -13,4 +13,5 @@ public interface RagService {
     ChatRoomDto createChatRoom(MultipartFile file);
     ChatResponseDto ask(Long roomId, ChatRequestDto requestDto);
     void addDocumentToRoom(Long roomId, MultipartFile file);
+    void deleteChatRoom(Long roomId);
 }
