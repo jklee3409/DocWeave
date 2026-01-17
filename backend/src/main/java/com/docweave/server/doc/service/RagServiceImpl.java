@@ -202,6 +202,14 @@ public class RagServiceImpl implements RagService {
         }
     }
 
+    @Override
+    public void deleteChatRoom(Long roomId) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
+
+        chatRoomRepository.delete(chatRoom);
+    }
+
     private static @NonNull PromptTemplate getPromptTemplate() {
         String promptText = """
             당신은 'DocWeave' 라는 지능형 문서 분석 AI 어시스턴트입니다.
