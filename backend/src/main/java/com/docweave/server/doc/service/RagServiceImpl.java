@@ -8,14 +8,20 @@ import com.docweave.server.doc.dto.response.ChatResponseDto;
 import com.docweave.server.doc.entity.ChatDocument;
 import com.docweave.server.doc.entity.ChatMessage;
 import com.docweave.server.doc.entity.ChatRoom;
+import com.docweave.server.doc.entity.DocContent;
 import com.docweave.server.doc.exception.AiProcessingException;
 import com.docweave.server.doc.exception.ChatRoomFindingException;
 import com.docweave.server.doc.exception.FileHandlingException;
 import com.docweave.server.doc.repository.ChatDocumentRepository;
 import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
+import com.docweave.server.doc.repository.DocContentRepository;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +49,10 @@ public class RagServiceImpl implements RagService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatDocumentRepository chatDocumentRepository;
+    private final DocContentRepository docContentRepository;
+
+    private static final int PARENT_CHUNK_SIZE = 1000;
+    private static final int CHILD_CHUNK_SIZE = 300;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,9 +78,11 @@ public class RagServiceImpl implements RagService {
     }
 
     @Override
+    @Transactional
     public ChatRoomDto createChatRoom(MultipartFile file) {
         if (file.isEmpty()) throw new FileHandlingException(ErrorCode.FILE_EMPTY);
-        if (!file.getOriginalFilename().toLowerCase().endsWith(".pdf")) throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
+        if (!Objects.requireNonNull(file.getOriginalFilename()).toLowerCase().endsWith(".pdf"))
+            throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
 
         try {
             // DB에 채팅방 생성
@@ -78,23 +90,8 @@ public class RagServiceImpl implements RagService {
                     .title(file.getOriginalFilename())
                     .build());
 
-            // PDF 파싱
-            Resource resource = file.getResource();
-            PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
-            List<Document> documents = pdfReader.get();
-
-            if (documents.isEmpty()) throw new FileHandlingException(ErrorCode.DOCUMENT_PARSING_ERROR);
-
-            // 문서 스플릿 및 메타데이터(roomId) 추가
-            TokenTextSplitter splitter = new TokenTextSplitter();
-            List<Document> splitDocuments = splitter.apply(documents);
-
-            // 모든 문서 조각에 roomId를 태깅하여 저장
-            for (Document doc : splitDocuments) {
-                doc.getMetadata().put("roomId", chatRoom.getId());
-            }
-
-            vectorStore.add(splitDocuments);
+            // Parent-Child 처리 로직 호출
+            processDocument(chatRoom, file);
 
             // 첫 안내 메시지 저장
             chatMessageRepository.save(ChatMessage.builder()
@@ -116,6 +113,30 @@ public class RagServiceImpl implements RagService {
     }
 
     @Override
+    @Transactional
+    public void addDocumentToRoom(Long roomId, MultipartFile file) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
+
+        try {
+            // Parent-Child 처리 로직 호출
+            processDocument(chatRoom, file);
+
+            // 시스템 메시지 추가 (사용자에게 알림)
+            chatMessageRepository.save(ChatMessage.builder()
+                    .chatRoom(chatRoom)
+                    .role(ChatMessage.MessageRole.AI)
+                    .content("📎 **" + file.getOriginalFilename() + "** 문서가 추가되었습니다.")
+                    .build());
+
+        } catch (Exception e) {
+            log.error("Add Document Error", e);
+            throw new FileHandlingException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    @Override
+    @Transactional
     public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
@@ -128,18 +149,32 @@ public class RagServiceImpl implements RagService {
                 .build());
 
         try {
-            // 벡터 검색 (roomId가 일치하는 문서만 검색)
-            // Filter Expression: "roomId == 123"
-            List<Document> similarDocuments = vectorStore.similaritySearch(
+            // Vector Search: 질문과 유사한 'Child' 청크 검색
+            List<Document> similarChildren = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(requestDto.getMessage())
                             .topK(5)
-                            .filterExpression("roomId == " + roomId) // 필터링
+                            .filterExpression("roomId == " + roomId)
                             .build()
             );
 
-            String context = similarDocuments.isEmpty() ? "" :
-                    similarDocuments.stream().map(Document::getText).collect(Collectors.joining("\n"));
+            // Parent ID 추출
+            Set<Long> parentIds = similarChildren.stream()
+                    .map(doc -> {
+                        Object pid = doc.getMetadata().get("parent_id");
+                        return pid != null ? Long.valueOf(pid.toString()) : null;
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            // RDB에서 Parent 조회
+            String context = "";
+            if (!parentIds.isEmpty()) {
+                List<DocContent> parentContents = docContentRepository.findAllByIdIn(new ArrayList<>(parentIds));
+                context = parentContents.stream()
+                        .map(DocContent::getContent)
+                        .collect(Collectors.joining("\n\n"));
+            }
 
             // 프롬포트 생성
             PromptTemplate template = getPromptTemplate();
@@ -166,48 +201,61 @@ public class RagServiceImpl implements RagService {
     }
 
     @Override
-    public void addDocumentToRoom(Long roomId, MultipartFile file) {
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
-
-        // 파일 정보 DB 저장
-        chatDocumentRepository.save(ChatDocument.builder()
-                .chatRoom(chatRoom)
-                .fileName(file.getOriginalFilename())
-                .build());
-
-        // PDF 파싱 및 벡터 저장
-        try {
-            Resource resource = file.getResource();
-            PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
-            List<Document> documents = pdfReader.get();
-            TokenTextSplitter  splitter = new TokenTextSplitter();
-            List<Document> splitDocuments = splitter.apply(documents);
-
-            // 기존 방 번호(roomId)를 그대로 태깅
-            for (Document doc : splitDocuments) {
-                doc.getMetadata().put("roomId", chatRoom.getId());
-            }
-            vectorStore.add(splitDocuments);
-
-            // 시스템 메시지 추가 (사용자에게 알림)
-            chatMessageRepository.save(ChatMessage.builder()
-                    .chatRoom(chatRoom)
-                    .role(ChatMessage.MessageRole.AI)
-                    .content("📎 **" + file.getOriginalFilename() + "** 문서가 추가되었습니다.")
-                    .build());
-
-        } catch (Exception e) {
-            throw new FileHandlingException(ErrorCode.FILE_UPLOAD_FAILED);
-        }
-    }
-
-    @Override
     public void deleteChatRoom(Long roomId) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
         chatRoomRepository.delete(chatRoom);
+    }
+
+    private void processDocument(ChatRoom chatRoom, MultipartFile file) {
+        // 파일 메타데이터 RDB 저장
+        ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
+                .chatRoom(chatRoom)
+                .fileName(file.getOriginalFilename())
+                .build());
+
+        // PDF 파싱
+        Resource resource = file.getResource();
+        PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
+        List<Document> rawDocuments = pdfReader.get();
+
+        if (rawDocuments.isEmpty()) throw new FileHandlingException(ErrorCode.DOCUMENT_PARSING_ERROR);
+
+        // Parent Chunking (1000 토큰)
+        TokenTextSplitter parentSplitter = new TokenTextSplitter(PARENT_CHUNK_SIZE, 100, 10, 1000, true);
+        List<Document> parentDocs = parentSplitter.apply(rawDocuments);
+
+        List<Document> childDocsToEmbed = new ArrayList<>();
+
+        // Parent 저장 및 Child 생성 루프
+        for (Document pDoc : parentDocs) {
+            // Parent를 RDB에 저장
+            Object pageNumObj = pDoc.getMetadata().getOrDefault("page_number", 0);
+            int pageNum = (pageNumObj instanceof Number) ? ((Number) pageNumObj).intValue() : 0;
+
+            DocContent savedParent = docContentRepository.save(DocContent.builder()
+                    .chatDocument(chatDocument)
+                    .content(pDoc.getText())
+                    .pageNumber(pageNum)
+                    .build());
+
+            // Child Chunking (300 토큰)
+            TokenTextSplitter childSplitter = new TokenTextSplitter(CHILD_CHUNK_SIZE, 50, 10, 100, true);
+            List<Document> childDocs = childSplitter.apply(Collections.singletonList(pDoc));
+
+            // Child에 Parent ID 태깅
+            for (Document cDoc : childDocs) {
+                cDoc.getMetadata().put("parent_id", savedParent.getId());
+                cDoc.getMetadata().put("roomId", chatRoom.getId());
+                cDoc.getMetadata().put("source_file", file.getOriginalFilename());
+                cDoc.getMetadata().put("page_number", pageNum);
+            }
+            childDocsToEmbed.addAll(childDocs);
+        }
+
+        // Child만 벡터 DB에 저장
+        vectorStore.add(childDocsToEmbed);
     }
 
     private static @NonNull PromptTemplate getPromptTemplate() {
