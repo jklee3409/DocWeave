@@ -38,6 +38,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Flux;
 
 @Slf4j
 @Service
@@ -137,7 +138,7 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional
-    public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
+    public Flux<String> ask(Long roomId, ChatRequestDto requestDto) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
@@ -180,19 +181,24 @@ public class RagServiceImpl implements RagService {
             PromptTemplate template = getPromptTemplate();
             Prompt prompt = template.create(Map.of("context", context, "message", requestDto.getMessage()));
 
-            // AI 응답 생성 및 저장
-            String aiAnswer = chatClient.prompt(prompt).call().content();
+            // AI 응답 스트리밍 및 완료 시 DB 저장
+            StringBuffer contentBuffer = new StringBuffer();
 
-            chatMessageRepository.save(ChatMessage.builder()
-                    .chatRoom(chatRoom)
-                    .role(ChatMessage.MessageRole.AI)
-                    .content(aiAnswer)
-                    .build());
-
-            return ChatResponseDto.builder()
-                    .question(requestDto.getMessage())
-                    .answer(aiAnswer)
-                    .build();
+            return chatClient.prompt(prompt)
+                    .stream()
+                    .content()
+                    .doOnNext(chunk -> {
+                        log.debug("Chunk Generated: {}", chunk);
+                        contentBuffer.append(chunk);
+                    })
+                    .doOnComplete(() -> {
+                        chatMessageRepository.save(ChatMessage.builder()
+                                .chatRoom(chatRoom)
+                                .role(ChatMessage.MessageRole.AI)
+                                .content(contentBuffer.toString())
+                                .build());
+                    })
+                    .doOnError(e -> log.error("AI Streaming Error", e));
 
         } catch (Exception e) {
             log.error("AI Error", e);
@@ -270,7 +276,7 @@ public class RagServiceImpl implements RagService {
                - 핵심 키워드는 **볼드체**로 강조하세요.
                - 나열되는 정보는 글머리 기호(-, 1.)를 사용하여 정리하세요.
                - 필요하다면 표(Table) 형식을 사용해도 좋습니다.
-            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 답변에는 반드시 **한국어**만 사용하세요. 중국어, 일본어 등의 다른 언어를 사용하지 마세요.
+            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 답변에는 반드시 **한국어와 영어**만 사용하세요. 중국어, 일본어 등의 다른 언어를 사용하지 마세요. 절대 답변에는 한국어와 영어 이외의 언어가 포함되지 않도록 하세요.
             
             [Context]
             {context}

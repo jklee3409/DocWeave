@@ -324,3 +324,24 @@ textarea {
 @keyframes slideIn { from { opacity: 0; } to { opacity: 1; } }
 .loading-dots:after { content: '.'; animation: dots 1.5s steps(5, end) infinite; }
 @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } 80%, 100% { content: ''; } }
+
+/* 마크다운 스타일 보정 */
+.markdown-content pre {
+  /* 코드 블록이 너무 커지지 않게 */
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap; /* 줄바꿈 유지 */
+}
+
+/* 커서 깜빡임 애니메이션 */
+.typing-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: #4f46e5;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

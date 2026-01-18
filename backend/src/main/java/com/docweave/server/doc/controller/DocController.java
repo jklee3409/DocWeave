@@ -4,11 +4,10 @@ import com.docweave.server.common.dto.BaseResponseDto;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
-import com.docweave.server.doc.dto.response.ChatResponseDto;
-import com.docweave.server.doc.dto.response.UploadResponseDto;
 import com.docweave.server.doc.service.RagService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequiredArgsConstructor
@@ -41,11 +41,11 @@ public class DocController {
         return BaseResponseDto.success(ragService.getChatMessages(roomId));
     }
 
-    @PostMapping("/rooms/{roomId}/chat")
-    public BaseResponseDto<ChatResponseDto> chat(
+    @PostMapping(value = "/rooms/{roomId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> chat(
             @PathVariable Long roomId,
             @RequestBody ChatRequestDto requestDto) {
-        return BaseResponseDto.success(ragService.ask(roomId, requestDto));
+        return ragService.ask(roomId, requestDto);
     }
 
     @PostMapping("/rooms/{roomId}/files")

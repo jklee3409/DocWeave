@@ -14,6 +14,7 @@ public class ExecutionTimer {
 
     @Around("execution(* com.docweave.server.doc.service.RagService.ask(..))" )
     public Object measureTime(ProceedingJoinPoint joinPoint) throws Throwable {
+        log.info("⏱️ [Performance] '{}' 실행 시간 측정 시작", joinPoint.getSignature().getName());
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 
