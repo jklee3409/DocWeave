@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash } from 'react-icons/fa';
+import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner } from 'react-icons/fa';
 import './App.css';
 
 function App() {
@@ -10,34 +10,29 @@ function App() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
 
-    // 마크다운 설정
     useEffect(() => {
         marked.setOptions({
             breaks: true,
             gfm: true,
         });
+        fetchRooms();
     }, []);
 
-    // 초기 데이터 로드
-    useEffect(() => { fetchRooms(); }, []);
-
-    // 방 변경 시 메시지 로드
     useEffect(() => {
         if (currentRoomId) fetchMessages(currentRoomId);
         else setMessages([]);
     }, [currentRoomId]);
 
-    // 자동 스크롤
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // 텍스트 영역 높이 조절
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -63,7 +58,7 @@ function App() {
         const selectedFile = e.target.files[0];
         if (!selectedFile) return;
 
-        setIsLoading(true);
+        setIsUploading(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
 
@@ -73,6 +68,12 @@ function App() {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 fetchMessages(currentRoomId);
+
+                setRooms(prevRooms => {
+                    const targetRoom = prevRooms.find(r => r.id === currentRoomId);
+                    const otherRooms = prevRooms.filter(r => r.id !== currentRoomId);
+                    return targetRoom ? [targetRoom, ...otherRooms] : prevRooms;
+                });
             } else {
                 const res = await axios.post('http://localhost:8080/api/doc/rooms', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
@@ -83,31 +84,25 @@ function App() {
             }
         } catch (error) {
             console.error(error);
-            alert('파일 업로드 오류');
+            alert('파일 업로드 및 분석 중 오류가 발생했습니다.');
         } finally {
-            setIsLoading(false);
+            setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    // 전체 텍스트를 받아서 state를 조금씩 업데이트
     const animateTyping = async (fullText) => {
-        const speed = 20; // 타이핑 속도 (ms)
+        const speed = 20;
         let displayedText = '';
-
-        // 청크 단위로 나누거나, 글자 단위로 처리
         const chars = fullText.split('');
 
         for (let i = 0; i < chars.length; i++) {
-            // 비동기 지연 (타이핑 효과)
             await new Promise(resolve => setTimeout(resolve, speed));
-
             displayedText += chars[i];
 
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
-                // 마지막 메시지가 AI인 경우에만 내용 업데이트
                 if (lastMsg.role === 'ai') {
                     lastMsg.content = displayedText;
                 }
@@ -118,66 +113,55 @@ function App() {
 
     const preprocessMarkdown = (text) => {
         if (!text) return '';
-        // 리스트(*, -, 1.) 앞에 줄바꿈이 없으면 강제로 줄바꿈 2개 추가하여 렌더링 보정
         let processed = text.replace(/(?<!\n)(\s*)(\*|-|\d+\.) /g, '\n\n$2 ');
         processed = processed.replace(/(\n)(\s*)(\*|-|\d+\.) /g, '\n\n$3 ');
         return processed;
     };
 
-    //  Axios 일반 요청
     const handleSend = async () => {
         if (!input.trim() || !currentRoomId) return;
 
         const userMessage = input;
         setInput('');
 
-        // 1. 사용자 메시지 추가 + AI 로딩(빈값) 메시지 추가
         setMessages(prev => [
             ...prev,
             { role: 'user', content: userMessage },
-            { role: 'ai', content: '', isStreaming: true } // isStreaming으로 커서 표시 제어
+            { role: 'ai', content: '', isStreaming: true }
         ]);
         setIsLoading(true);
+
+        // 메시지 전송 시 현재 방을 목록 최상단으로 이동 (UX 최적화)
+        setRooms(prevRooms => {
+            const targetRoom = prevRooms.find(r => r.id === currentRoomId);
+            const otherRooms = prevRooms.filter(r => r.id !== currentRoomId);
+            return targetRoom ? [targetRoom, ...otherRooms] : prevRooms;
+        });
 
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
         try {
-            // 2. 백엔드 요청 (Blocking 방식)
-            // 응답 타입: BaseResponseDto<ChatResponseDto>
             const response = await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/chat`, {
                 message: userMessage
             });
 
-            // 3. 응답 데이터 추출 (ChatResponseDto: { question, answer })
-            const responseData = response.data; // BaseResponseDto
-
+            const responseData = response.data;
             if (responseData && responseData.data) {
-                const aiAnswer = responseData.data.answer;
-
-                // 4. 타자기 효과 실행 (받은 전체 텍스트로 애니메이션)
-                await animateTyping(aiAnswer);
-            } else {
-                throw new Error("Invalid response format");
+                await animateTyping(responseData.data.answer);
             }
 
-            // 5. 스트리밍 상태 종료
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
-                if (lastMsg.role === 'ai') {
-                    lastMsg.isStreaming = false;
-                }
+                if (lastMsg.role === 'ai') lastMsg.isStreaming = false;
                 return newMessages;
             });
 
         } catch (error) {
             console.error("Chat error", error);
 
-            // 에러 메시지 처리
             let errorMessage = "⚠️ **오류:** 응답을 처리할 수 없습니다.";
-
             const resBody = error.response?.data;
-
             const statusCode = resBody?.statusCode;
             const errorCodeName = resBody?.data?.statusCodeName;
 
@@ -233,7 +217,15 @@ function App() {
                 <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} />
             </div>
 
-            <div className="main-content">
+            <div className="main-content" style={{ position: 'relative' }}>
+                {isUploading && (
+                    <div className="loading-overlay">
+                        <FaSpinner className="loading-spinner" />
+                        <div className="loading-text">문서를 분석하고 있습니다...</div>
+                        <div className="loading-subtext">페이지 수에 따라 시간이 소요될 수 있습니다.</div>
+                    </div>
+                )}
+
                 <header className="app-header">
                     <div className="brand" onClick={() => window.location.reload()}>
                         <FaBrain size={24} color="#4f46e5" />
@@ -281,7 +273,7 @@ function App() {
                 {currentRoomId && (
                     <div className="input-container">
                         <div className="input-wrapper">
-                            <button className="file-btn" onClick={() => fileInputRef.current.click()} disabled={isLoading}>
+                            <button className="file-btn" onClick={() => fileInputRef.current.click()} disabled={isLoading || isUploading}>
                                 <FaFilePdf size={18} />
                             </button>
                             <textarea
@@ -290,10 +282,10 @@ function App() {
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="질문하세요..."
-                                disabled={isLoading}
+                                disabled={isLoading || isUploading}
                                 rows={1}
                             />
-                            <button className="send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
+                            <button className="send-btn" onClick={handleSend} disabled={isLoading || isUploading || !input.trim()}>
                                 <FaPaperPlane size={16} />
                             </button>
                         </div>
