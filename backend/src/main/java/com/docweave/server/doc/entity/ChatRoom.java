@@ -31,6 +31,8 @@ public class ChatRoom {
 
     private String title;
 
+    private LocalDateTime lastActiveAt;
+
     @OneToMany(mappedBy = "chatRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ChatDocument> documents = new ArrayList<>();
@@ -41,4 +43,8 @@ public class ChatRoom {
 
     @CreatedDate
     private LocalDateTime createdAt;
+
+    public void updateLastActiveAt() {
+        this.lastActiveAt = LocalDateTime.now();
+    }
 }

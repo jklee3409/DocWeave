@@ -17,6 +17,7 @@ import com.docweave.server.doc.repository.ChatDocumentRepository;
 import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
 import com.docweave.server.doc.repository.DocContentRepository;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -63,7 +64,7 @@ public class RagServiceImpl implements RagService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatRoomDto> getChatRooms() {
-        return chatRoomRepository.findAllByOrderByCreatedAtDesc().stream()
+        return chatRoomRepository.findAllByOrderByLastActiveAtDesc().stream()
                 .map(room -> ChatRoomDto.builder()
                         .id(room.getId())
                         .title(room.getTitle())
@@ -94,6 +95,7 @@ public class RagServiceImpl implements RagService {
             // DB에 채팅방 생성
             ChatRoom chatRoom = chatRoomRepository.save(ChatRoom.builder()
                     .title(file.getOriginalFilename())
+                            .lastActiveAt(LocalDateTime.now())
                     .build());
 
             // Parent-Child 처리 로직 호출
@@ -124,6 +126,8 @@ public class RagServiceImpl implements RagService {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
+        chatRoom.updateLastActiveAt();
+
         try {
             // Parent-Child 처리 로직 호출
             processDocument(chatRoom, file);
@@ -146,6 +150,8 @@ public class RagServiceImpl implements RagService {
     public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
+
+        chatRoom.updateLastActiveAt();
 
         // 사용자 질문 DB 저장
         chatMessageRepository.save(ChatMessage.builder()
