@@ -15,7 +15,7 @@ function App() {
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
 
-    // marked 설정
+    // marked 옵션 설정 (줄바꿈 허용)
     useEffect(() => {
         marked.setOptions({
             breaks: true,
@@ -125,21 +125,13 @@ function App() {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    // [중요 수정 1] trim() 제거: 코드 들여쓰기나 Markdown 공백 유지
                     if (line.startsWith('data:')) {
-                        // [중요 수정 2] 정규식 대신 slice 사용 및 공백 처리 개선
-                        // SSE 표준은 'data:' 뒤에 공백 1개가 오지만,
-                        // LLM 토큰 자체가 공백으로 시작할 수 있으므로 주의해서 제거해야 함
+                        // [수정됨] "data:" 접두어(5글자)만 제거하고, 뒤따르는 공백은 그대로 유지합니다.
+                        // 이유: LLM이 생성하는 토큰 자체가 " 단어" 처럼 공백으로 시작하는 경우가 많으며,
+                        // 이를 제거하면 띄어쓰기가 사라지는 현상이 발생합니다.
                         let content = line.slice(5);
 
-                        // data: 뒤에 첫 번째 공백만 제거 (SSE 프로토콜 공백)
-                        // 만약 content가 "  hello"라면(토큰이 " hello"), 결과는 " hello"가 되어야 함
-                        if (content.startsWith(' ')) {
-                            content = content.slice(1);
-                        }
-
-                        // [중요 수정 3] 줄바꿈(\n) 복원
-                        // Flux<String>이 '\n' 토큰을 보낼 때, split('\n')에 의해 빈 문자열이 된 경우 처리
+                        // Flux<String> 스트림에서 줄바꿈이 빈 문자열로 들어오는 경우 복원
                         if (content === '') {
                             content = '\n';
                         }
@@ -240,7 +232,7 @@ function App() {
                         <div className="message-list">
                             {messages.map((msg, index) => {
                                 const isStreamingMessage = msg.isStreaming && isLoading;
-                                // [수정] 옵션이 적용된 marked 인스턴스 사용
+                                // 마크다운 파싱 (옵션 적용됨)
                                 const htmlContent = marked.parse(msg.content || '');
 
                                 return (
