@@ -20,6 +20,7 @@ public enum ErrorCode {
     AI_SERVICE_ERROR(30000, "AI_SERVICE_ERROR", "AI 모델 호출 중 오류가 발생했습니다."),
     VECTOR_STORE_ERROR(30001, "VECTOR_STORE_ERROR", "벡터 데이터베이스 저장/검색 중 오류가 발생했습니다."),
     DOCUMENT_PARSING_ERROR(30002, "DOCUMENT_PARSING_ERROR", "문서 내용을 읽는 도중 오류가 발생했습니다."),
+    GUARDRAIL_BLOCKED(30003, "GUARDRAIL_BLOCKED", "AI 답변이 신뢰성 기준을 충족하지 못해 차단되었습니다."),
 
     // ChatRoom (40000 ~)
     CHATROOM_NOT_FOUND(40000, "CHATROOM_NOT_FOUND", "존재하지 않는 채팅방입니다.");

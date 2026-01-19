@@ -5,6 +5,7 @@ import com.docweave.server.common.dto.ErrorResponseDto;
 import com.docweave.server.doc.exception.AiProcessingException;
 import com.docweave.server.doc.exception.ChatRoomFindingException;
 import com.docweave.server.doc.exception.FileHandlingException;
+import com.docweave.server.doc.exception.GuardrailException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -42,5 +43,11 @@ public class GlobalExceptionHandler {
     public BaseResponseDto<ErrorResponseDto> handleException(Exception e) {
         log.error("Unhandled Exception: ", e);
         return BaseResponseDto.fail(ErrorCode.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(GuardrailException.class)
+    public BaseResponseDto<ErrorResponseDto> handleGuardrailException(GuardrailException e) {
+        log.warn("Guardrail Violation: {}", e.getMessage());
+        return BaseResponseDto.fail(e.getErrorCode());
     }
 }

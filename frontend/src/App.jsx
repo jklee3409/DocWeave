@@ -15,7 +15,7 @@ function App() {
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
 
-    // marked 옵션 설정 (줄바꿈 허용)
+    // 마크다운 설정
     useEffect(() => {
         marked.setOptions({
             breaks: true,
@@ -23,17 +23,21 @@ function App() {
         });
     }, []);
 
+    // 초기 데이터 로드
     useEffect(() => { fetchRooms(); }, []);
 
+    // 방 변경 시 메시지 로드
     useEffect(() => {
         if (currentRoomId) fetchMessages(currentRoomId);
         else setMessages([]);
     }, [currentRoomId]);
 
+    // 자동 스크롤
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // 텍스트 영역 높이 조절
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -86,73 +90,77 @@ function App() {
         }
     };
 
+    // 전체 텍스트를 받아서 state를 조금씩 업데이트
+    const animateTyping = async (fullText) => {
+        const speed = 20; // 타이핑 속도 (ms)
+        let displayedText = '';
+
+        // 청크 단위로 나누거나, 글자 단위로 처리
+        const chars = fullText.split('');
+
+        for (let i = 0; i < chars.length; i++) {
+            // 비동기 지연 (타이핑 효과)
+            await new Promise(resolve => setTimeout(resolve, speed));
+
+            displayedText += chars[i];
+
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const lastMsg = newMessages[newMessages.length - 1];
+                // 마지막 메시지가 AI인 경우에만 내용 업데이트
+                if (lastMsg.role === 'ai') {
+                    lastMsg.content = displayedText;
+                }
+                return newMessages;
+            });
+        }
+    };
+
+    const preprocessMarkdown = (text) => {
+        if (!text) return '';
+        // 리스트(*, -, 1.) 앞에 줄바꿈이 없으면 강제로 줄바꿈 2개 추가하여 렌더링 보정
+        let processed = text.replace(/(?<!\n)(\s*)(\*|-|\d+\.) /g, '\n\n$2 ');
+        processed = processed.replace(/(\n)(\s*)(\*|-|\d+\.) /g, '\n\n$3 ');
+        return processed;
+    };
+
+    //  Axios 일반 요청
     const handleSend = async () => {
         if (!input.trim() || !currentRoomId) return;
 
         const userMessage = input;
         setInput('');
+
+        // 1. 사용자 메시지 추가 + AI 로딩(빈값) 메시지 추가
         setMessages(prev => [
             ...prev,
             { role: 'user', content: userMessage },
-            { role: 'ai', content: '', isStreaming: true }
+            { role: 'ai', content: '', isStreaming: true } // isStreaming으로 커서 표시 제어
         ]);
         setIsLoading(true);
 
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
         try {
-            const response = await fetch(`http://localhost:8080/api/doc/rooms/${currentRoomId}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMessage }),
+            // 2. 백엔드 요청 (Blocking 방식)
+            // 응답 타입: BaseResponseDto<ChatResponseDto>
+            const response = await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/chat`, {
+                message: userMessage
             });
 
-            if (!response.body) throw new Error("No response body");
+            // 3. 응답 데이터 추출 (ChatResponseDto: { question, answer })
+            const responseData = response.data; // BaseResponseDto
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let aiTextAccumulated = '';
-            let buffer = '';
+            if (responseData && responseData.data) {
+                const aiAnswer = responseData.data.answer;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                // 스트림 디코딩
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                // 마지막 라인은 불완전할 수 있으므로 buffer에 남겨둠
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('data:')) {
-                        // [수정됨] "data:" 접두어(5글자)만 제거하고, 뒤따르는 공백은 그대로 유지합니다.
-                        // 이유: LLM이 생성하는 토큰 자체가 " 단어" 처럼 공백으로 시작하는 경우가 많으며,
-                        // 이를 제거하면 띄어쓰기가 사라지는 현상이 발생합니다.
-                        let content = line.slice(5);
-
-                        // Flux<String> 스트림에서 줄바꿈이 빈 문자열로 들어오는 경우 복원
-                        if (content === '') {
-                            content = '\n';
-                        }
-
-                        aiTextAccumulated += content;
-                    }
-                }
-
-                // 상태 업데이트 (스트리밍 중)
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    const lastMsg = newMessages[newMessages.length - 1];
-                    if (lastMsg.role === 'ai') {
-                        lastMsg.content = aiTextAccumulated;
-                        lastMsg.isStreaming = true;
-                    }
-                    return newMessages;
-                });
+                // 4. 타자기 효과 실행 (받은 전체 텍스트로 애니메이션)
+                await animateTyping(aiAnswer);
+            } else {
+                throw new Error("Invalid response format");
             }
 
-            // 스트리밍 완료 처리
+            // 5. 스트리밍 상태 종료
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
@@ -163,11 +171,24 @@ function App() {
             });
 
         } catch (error) {
-            console.error("Streaming error", error);
+            console.error("Chat error", error);
+
+            // 에러 메시지 처리
+            let errorMessage = "⚠️ **오류:** 응답을 처리할 수 없습니다.";
+
+            const resBody = error.response?.data;
+
+            const statusCode = resBody?.statusCode;
+            const errorCodeName = resBody?.data?.statusCodeName;
+
+            if (statusCode === 30003 || errorCodeName === 'GUARDRAIL_BLOCKED') {
+                errorMessage = "🚫 **[보안 경고]**\n\n문서와의 연관성이 낮거나 부적절한 질문으로 판단되어 답변이 차단되었습니다.";
+            }
+
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
-                lastMsg.content += '\n\n⚠️ **오류:** 응답 중단됨';
+                lastMsg.content = errorMessage;
                 lastMsg.isStreaming = false;
                 return newMessages;
             });
@@ -232,8 +253,9 @@ function App() {
                         <div className="message-list">
                             {messages.map((msg, index) => {
                                 const isStreamingMessage = msg.isStreaming && isLoading;
-                                // 마크다운 파싱 (옵션 적용됨)
-                                const htmlContent = marked.parse(msg.content || '');
+                                const rawContent = msg.content || '';
+                                const processedContent = preprocessMarkdown(rawContent);
+                                const htmlContent = marked.parse(processedContent);
 
                                 return (
                                     <div key={index} className="message-row">

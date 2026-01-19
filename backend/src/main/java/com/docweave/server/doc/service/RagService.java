@@ -12,7 +12,7 @@ public interface RagService {
     List<ChatRoomDto> getChatRooms();
     List<ChatMessageDto> getChatMessages(Long roomId);
     ChatRoomDto createChatRoom(MultipartFile file);
-    Flux<String> ask(Long roomId, ChatRequestDto requestDto);
+    ChatResponseDto ask(Long roomId, ChatRequestDto requestDto);
     void addDocumentToRoom(Long roomId, MultipartFile file);
     void deleteChatRoom(Long roomId);
 }

@@ -4,6 +4,7 @@ import com.docweave.server.common.dto.BaseResponseDto;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
+import com.docweave.server.doc.dto.response.ChatResponseDto;
 import com.docweave.server.doc.service.RagService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -41,11 +42,11 @@ public class DocController {
         return BaseResponseDto.success(ragService.getChatMessages(roomId));
     }
 
-    @PostMapping(value = "/rooms/{roomId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> chat(
+    @PostMapping(value = "/rooms/{roomId}/chat")
+    public BaseResponseDto<ChatResponseDto> chat(
             @PathVariable Long roomId,
             @RequestBody ChatRequestDto requestDto) {
-        return ragService.ask(roomId, requestDto);
+        return BaseResponseDto.success(ragService.ask(roomId, requestDto));
     }
 
     @PostMapping("/rooms/{roomId}/files")

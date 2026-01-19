@@ -12,6 +12,7 @@ import com.docweave.server.doc.entity.DocContent;
 import com.docweave.server.doc.exception.AiProcessingException;
 import com.docweave.server.doc.exception.ChatRoomFindingException;
 import com.docweave.server.doc.exception.FileHandlingException;
+import com.docweave.server.doc.exception.GuardrailException;
 import com.docweave.server.doc.repository.ChatDocumentRepository;
 import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
@@ -30,6 +31,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -47,6 +49,7 @@ public class RagServiceImpl implements RagService {
 
     private final VectorStore vectorStore;
     private final ChatClient chatClient;
+    private final EmbeddingModel embeddingModel;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatDocumentRepository chatDocumentRepository;
@@ -54,6 +57,8 @@ public class RagServiceImpl implements RagService {
 
     private static final int PARENT_CHUNK_SIZE = 1000;
     private static final int CHILD_CHUNK_SIZE = 300;
+
+    private static final double SIMILARITY_THRESHOLD = 0.4;
 
     @Override
     @Transactional(readOnly = true)
@@ -138,7 +143,7 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional
-    public Flux<String> ask(Long roomId, ChatRequestDto requestDto) {
+    public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
@@ -181,24 +186,36 @@ public class RagServiceImpl implements RagService {
             PromptTemplate template = getPromptTemplate();
             Prompt prompt = template.create(Map.of("context", context, "message", requestDto.getMessage()));
 
-            // AI 응답 스트리밍 및 완료 시 DB 저장
-            StringBuffer contentBuffer = new StringBuffer();
+            log.info("Generating answer for room: {}", roomId);
+            String rawAnswer = chatClient.prompt(prompt).call().content();
 
-            return chatClient.prompt(prompt)
-                    .stream()
-                    .content()
-                    .doOnNext(chunk -> {
-                        log.debug("Chunk Generated: {}", chunk);
-                        contentBuffer.append(chunk);
-                    })
-                    .doOnComplete(() -> {
-                        chatMessageRepository.save(ChatMessage.builder()
-                                .chatRoom(chatRoom)
-                                .role(ChatMessage.MessageRole.AI)
-                                .content(contentBuffer.toString())
-                                .build());
-                    })
-                    .doOnError(e -> log.error("AI Streaming Error", e));
+            if (rawAnswer == null || rawAnswer.isBlank()) {
+                throw new AiProcessingException(ErrorCode.AI_SERVICE_ERROR);
+            }
+
+            // 가드레일 검증 적용
+            log.info("Validating answer quality for room: {}", roomId);
+            boolean isValid = validateResponse(context, rawAnswer);
+
+            if (!isValid) {
+                log.warn("Guardrail validation failed. RoomId: {}, Input: {}", roomId, requestDto.getMessage());
+                throw new GuardrailException(ErrorCode.GUARDRAIL_BLOCKED);
+            }
+
+            // 검증 통과 시 DB 저장
+            chatMessageRepository.save(ChatMessage.builder()
+                    .chatRoom(chatRoom)
+                    .role(ChatMessage.MessageRole.AI)
+                    .content(rawAnswer)
+                    .build());
+
+            return ChatResponseDto.builder()
+                    .question(requestDto.getMessage())
+                    .answer(rawAnswer)
+                    .build();
+
+        } catch (GuardrailException e) {
+            throw e;
 
         } catch (Exception e) {
             log.error("AI Error", e);
@@ -264,6 +281,50 @@ public class RagServiceImpl implements RagService {
         vectorStore.add(childDocsToEmbed);
     }
 
+    private boolean validateResponse(String context, String answer) {
+        // 규칙 기반 필터링 (빠른 차단)
+        if (answer.contains("제공된 문서에서 해당 내용을 찾을 수 없습니다")) return true;
+        if (answer.length() < 5) return false;
+
+        try {
+            // 임베딩 생성
+            float[] contextVector = embeddingModel.embed(context);
+            float[] answerVector = embeddingModel.embed(answer);
+
+            // 코사인 유사도 계산
+            double similarity = cosineSimilarity(contextVector, answerVector);
+            log.debug("Validation Similarity Score: {}", similarity);
+
+            // 임계값 비교
+            return similarity >= SIMILARITY_THRESHOLD;
+
+        } catch (Exception e) {
+            log.error("Similarity Calculation Failed", e);
+            return true;
+        }
+    }
+
+
+    private double cosineSimilarity(float[] v1, float[] v2) {
+        // 배열 유효성 검사
+        if (v1 == null || v2 == null || v1.length != v2.length) {
+            return 0.0;
+        }
+
+        double dotProduct = 0.0;
+        double normA = 0.0;
+        double normB = 0.0;
+
+        for (int i = 0; i < v1.length; i++) {
+            dotProduct += v1[i] * v2[i];
+            normA += Math.pow(v1[i], 2);
+            normB += Math.pow(v2[i], 2);
+        }
+
+        if (normA == 0 || normB == 0) return 0.0;
+        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
     private static @NonNull PromptTemplate getPromptTemplate() {
         String promptText = """
             당신은 'DocWeave' 라는 지능형 문서 분석 AI 어시스턴트입니다.
@@ -276,7 +337,7 @@ public class RagServiceImpl implements RagService {
                - 핵심 키워드는 **볼드체**로 강조하세요.
                - 나열되는 정보는 글머리 기호(-, 1.)를 사용하여 정리하세요.
                - 필요하다면 표(Table) 형식을 사용해도 좋습니다.
-            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 답변에는 반드시 **한국어와 영어**만 사용하세요. 중국어, 일본어 등의 다른 언어를 사용하지 마세요. 절대 답변에는 한국어와 영어 이외의 언어가 포함되지 않도록 하세요.
+            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 답변에는 반드시 **한국어와 영어**만 사용하세요. 중국어, 일본어 등의 언어를 사용하지 마세요.
             
             [Context]
             {context}
