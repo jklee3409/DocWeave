@@ -1,4 +1,4 @@
-package com.docweave.server.doc.service;
+package com.docweave.server.doc.service.impl;
 
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.ChatMessageDto;
@@ -17,6 +17,7 @@ import com.docweave.server.doc.repository.ChatDocumentRepository;
 import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
 import com.docweave.server.doc.repository.DocContentRepository;
+import com.docweave.server.doc.service.RagService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,7 +42,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import reactor.core.publisher.Flux;
 
 @Slf4j
 @Service
