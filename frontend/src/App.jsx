@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner } from 'react-icons/fa';
+import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle } from 'react-icons/fa';
 import './App.css';
 
 function App() {
@@ -10,24 +10,34 @@ function App() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState(null);
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
 
     useEffect(() => {
-        marked.setOptions({
-            breaks: true,
-            gfm: true,
-        });
+        marked.setOptions({ breaks: true, gfm: true });
         fetchRooms();
     }, []);
 
     useEffect(() => {
-        if (currentRoomId) fetchMessages(currentRoomId);
-        else setMessages([]);
+        if (currentRoomId) {
+            fetchMessages(currentRoomId);
+        } else {
+            setMessages([]);
+        }
     }, [currentRoomId]);
+
+    useEffect(() => {
+        let intervalId;
+        if (currentRoomId && !isLoading) {
+            intervalId = setInterval(() => {
+                fetchMessages(currentRoomId, true);
+            }, 3000);
+        }
+        return () => clearInterval(intervalId);
+    }, [currentRoomId, isLoading]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -47,10 +57,16 @@ function App() {
         } catch (err) { console.error("Failed to fetch rooms", err); }
     };
 
-    const fetchMessages = async (roomId) => {
+    const fetchMessages = async (roomId, isSilent = false) => {
         try {
+            if (isLoading && isSilent) return;
+
             const res = await axios.get(`http://localhost:8080/api/doc/rooms/${roomId}/messages`);
-            setMessages(res.data.data);
+
+            setMessages(prev => {
+                if (isSilent && prev.length === res.data.data.length) return prev;
+                return res.data.data;
+            });
         } catch (err) { console.error("Failed to fetch messages", err); }
     };
 
@@ -58,7 +74,7 @@ function App() {
         const selectedFile = e.target.files[0];
         if (!selectedFile) return;
 
-        setIsUploading(true);
+        setUploadStatus('uploading');
         const formData = new FormData();
         formData.append('file', selectedFile);
 
@@ -82,11 +98,14 @@ function App() {
                 setRooms([newRoom, ...rooms]);
                 setCurrentRoomId(newRoom.id);
             }
+            setUploadStatus('done');
+            setTimeout(() => setUploadStatus(null), 3000);
+
         } catch (error) {
             console.error(error);
-            alert('파일 업로드 및 분석 중 오류가 발생했습니다.');
+            alert('업로드 요청 실패');
+            setUploadStatus(null);
         } finally {
-            setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
@@ -102,9 +121,12 @@ function App() {
 
             setMessages(prev => {
                 const newMessages = [...prev];
-                const lastMsg = newMessages[newMessages.length - 1];
-                if (lastMsg.role === 'ai') {
-                    lastMsg.content = displayedText;
+                const lastMsgIndex = newMessages.length - 1;
+                if (lastMsgIndex >= 0 && newMessages[lastMsgIndex].role === 'ai') {
+                    newMessages[lastMsgIndex] = {
+                        ...newMessages[lastMsgIndex],
+                        content: displayedText
+                    };
                 }
                 return newMessages;
             });
@@ -123,15 +145,14 @@ function App() {
 
         const userMessage = input;
         setInput('');
+        setIsLoading(true);
 
         setMessages(prev => [
             ...prev,
             { role: 'user', content: userMessage },
             { role: 'ai', content: '', isStreaming: true }
         ]);
-        setIsLoading(true);
 
-        // 메시지 전송 시 현재 방을 목록 최상단으로 이동 (UX 최적화)
         setRooms(prevRooms => {
             const targetRoom = prevRooms.find(r => r.id === currentRoomId);
             const otherRooms = prevRooms.filter(r => r.id !== currentRoomId);
@@ -153,27 +174,26 @@ function App() {
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
-                if (lastMsg.role === 'ai') lastMsg.isStreaming = false;
+                if (lastMsg.role === 'ai') {
+                    lastMsg.isStreaming = false;
+                }
                 return newMessages;
             });
 
         } catch (error) {
             console.error("Chat error", error);
-
             let errorMessage = "⚠️ **오류:** 응답을 처리할 수 없습니다.";
-            const resBody = error.response?.data;
-            const statusCode = resBody?.statusCode;
-            const errorCodeName = resBody?.data?.statusCodeName;
-
-            if (statusCode === 30003 || errorCodeName === 'GUARDRAIL_BLOCKED') {
-                errorMessage = "🚫 **[보안 경고]**\n\n문서와의 연관성이 낮거나 부적절한 질문으로 판단되어 답변이 차단되었습니다.";
+            if (error.response?.data?.statusCode === 30003) {
+                errorMessage = "🚫 **[보안 경고]** 답변이 차단되었습니다.";
             }
 
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
-                lastMsg.content = errorMessage;
-                lastMsg.isStreaming = false;
+                if (lastMsg.role === 'ai') {
+                    lastMsg.content = errorMessage;
+                    lastMsg.isStreaming = false;
+                }
                 return newMessages;
             });
         } finally {
@@ -218,20 +238,24 @@ function App() {
             </div>
 
             <div className="main-content" style={{ position: 'relative' }}>
-                {isUploading && (
-                    <div className="loading-overlay">
-                        <FaSpinner className="loading-spinner" />
-                        <div className="loading-text">문서를 분석하고 있습니다...</div>
-                        <div className="loading-subtext">페이지 수에 따라 시간이 소요될 수 있습니다.</div>
-                    </div>
-                )}
-
                 <header className="app-header">
                     <div className="brand" onClick={() => window.location.reload()}>
                         <FaBrain size={24} color="#4f46e5" />
                         <span>DocWeave</span>
                         {currentRoomId && <span className="room-title-display">/ {rooms.find(r => r.id === currentRoomId)?.title}</span>}
                     </div>
+                    {uploadStatus === 'uploading' && (
+                        <div className="status-badge uploading">
+                            <FaSpinner className="spin-icon" />
+                            <span>업로드 요청 중...</span>
+                        </div>
+                    )}
+                    {uploadStatus === 'done' && (
+                        <div className="status-badge done">
+                            <FaCheckCircle />
+                            <span>요청 완료</span>
+                        </div>
+                    )}
                 </header>
 
                 <div className="chat-feed">
@@ -239,7 +263,7 @@ function App() {
                         <div className="empty-state">
                             <FaBrain className="logo-large" />
                             <h1 className="empty-title">무엇을 도와드릴까요?</h1>
-                            <p className="empty-desc"><strong>'새 문서 시작'</strong> 버튼을 눌러 PDF를 업로드하세요.</p>
+                            <p className="empty-desc"><strong>'새 문서 시작'</strong> 버튼을 눌러 PDF를 업로드하세요.<br/>백그라운드에서 분석되는 동안 다른 작업을 할 수 있습니다.</p>
                         </div>
                     ) : (
                         <div className="message-list">
@@ -273,7 +297,7 @@ function App() {
                 {currentRoomId && (
                     <div className="input-container">
                         <div className="input-wrapper">
-                            <button className="file-btn" onClick={() => fileInputRef.current.click()} disabled={isLoading || isUploading}>
+                            <button className="file-btn" onClick={() => fileInputRef.current.click()}>
                                 <FaFilePdf size={18} />
                             </button>
                             <textarea
@@ -282,10 +306,10 @@ function App() {
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="질문하세요..."
-                                disabled={isLoading || isUploading}
+                                disabled={isLoading}
                                 rows={1}
                             />
-                            <button className="send-btn" onClick={handleSend} disabled={isLoading || isUploading || !input.trim()}>
+                            <button className="send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
                                 <FaPaperPlane size={16} />
                             </button>
                         </div>

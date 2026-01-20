@@ -1,4 +1,3 @@
-/* 1. Global Reset & Layout */
 :root {
   width: 100%;
   height: 100%;
@@ -9,7 +8,7 @@ body {
   padding: 0;
   width: 100%;
   height: 100%;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
   background-color: #ffffff;
   color: #1f2937;
   overflow: hidden;
@@ -22,15 +21,14 @@ body {
 
 .app-container {
   display: flex;
-  flex-direction: row; /* 좌우 배치 */
+  flex-direction: row;
   height: 100vh;
   width: 100%;
 }
 
-/* 2. Sidebar (Left) */
 .sidebar {
   width: 260px;
-  background-color: #f9f9f9; /* 아주 연한 회색 */
+  background-color: #f9f9f9;
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
@@ -74,7 +72,6 @@ body {
   gap: 4px;
 }
 
-/* 채팅방 항목 스타일 수정 (삭제 버튼 포함) */
 .room-item {
   padding: 10px 12px;
   border-radius: 8px;
@@ -85,7 +82,7 @@ body {
   align-items: center;
   gap: 10px;
   transition: 0.2s;
-  position: relative; /* 삭제 버튼 배치를 위해 */
+  position: relative;
 }
 .room-item:hover { background-color: #e5e7eb; }
 .room-item.active { background-color: #e0e7ff; color: #4f46e5; font-weight: 600; }
@@ -97,7 +94,6 @@ body {
   text-overflow: ellipsis;
 }
 
-/* 삭제 버튼 (평소엔 숨김) */
 .delete-room-btn {
   background: transparent;
   border: none;
@@ -108,21 +104,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0; /* 숨김 */
+  opacity: 0;
   transition: all 0.2s;
 }
 
-/* 마우스 올렸을 때 삭제 버튼 보임 */
-.room-item:hover .delete-room-btn {
-  opacity: 1;
-}
+.room-item:hover .delete-room-btn { opacity: 1; }
+.delete-room-btn:hover { background-color: #fee2e2; color: #ef4444; }
 
-.delete-room-btn:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
-}
-
-/* 3. Main Content (Right) */
 .main-content {
   flex: 1;
   display: flex;
@@ -133,7 +121,6 @@ body {
   min-width: 0;
 }
 
-/* 4. Header */
 .app-header {
   height: 60px;
   padding: 0 30px;
@@ -167,20 +154,47 @@ body {
   gap: 5px;
 }
 
-/* 5. Chat Feed */
+/* Status Badge Styles */
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-out;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.status-badge.uploading {
+  background-color: #e0e7ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.status-badge.done {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
 .chat-feed {
   flex: 1;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center; /* 메시지 중앙 정렬 */
+  align-items: center;
   overflow-y: auto;
   padding-top: 70px;
   padding-bottom: 160px;
   scroll-behavior: smooth;
 }
 
-/* Empty State */
 .empty-state {
   width: 100%;
   height: 100%;
@@ -198,7 +212,6 @@ body {
 .empty-title { font-size: 2rem; font-weight: 700; margin-bottom: 15px; }
 .empty-desc { font-size: 1.1rem; color: #6b7280; max-width: 500px; line-height: 1.6; }
 
-/* Message List */
 .message-list {
   width: 100%;
   max-width: 900px;
@@ -236,14 +249,13 @@ body {
 }
 .user-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; color: #111827; }
 
-/* 6. Input Area (Floating) */
 .input-container {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   padding: 30px 20px;
   background: linear-gradient(to top, #ffffff 80%, rgba(255,255,255,0));
   display: flex;
-  justify-content: center; /* 입력창 중앙 정렬 */
+  justify-content: center;
   align-items: flex-end;
   z-index: 20;
 }
@@ -302,7 +314,6 @@ textarea {
 .send-btn:disabled { color: #d1d5db; cursor: default; }
 .send-btn:not(:disabled):hover { background-color: #e0e7ff; }
 
-/* 7. Markdown */
 .markdown-content { line-height: 1.7; font-size: 1rem; color: #374151; }
 .markdown-content p { margin-bottom: 0.8em; }
 .markdown-content strong { color: #111827; font-weight: 700; }
@@ -312,6 +323,8 @@ textarea {
   background: #1e293b; color: #f8fafc;
   padding: 16px; border-radius: 12px;
   overflow-x: auto; margin: 16px 0; font-size: 0.9em;
+  max-width: 100%;
+  white-space: pre-wrap;
 }
 .markdown-content code {
   background: #f3f4f6; padding: 2px 6px;
@@ -319,21 +332,10 @@ textarea {
 }
 .markdown-content pre code { background: transparent; color: inherit; padding: 0; }
 
-/* 8. Animations */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { opacity: 0; } to { opacity: 1; } }
-.loading-dots:after { content: '.'; animation: dots 1.5s steps(5, end) infinite; }
-@keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } 80%, 100% { content: ''; } }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* 마크다운 스타일 보정 */
-.markdown-content pre {
-  /* 코드 블록이 너무 커지지 않게 */
-  max-width: 100%;
-  overflow-x: auto;
-  white-space: pre-wrap; /* 줄바꿈 유지 */
-}
-
-/* 커서 깜빡임 애니메이션 */
 .typing-cursor {
   display: inline-block;
   margin-left: 2px;
@@ -344,44 +346,4 @@ textarea {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
-}
-
-/* --- Loading Overlay --- */
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(255, 255, 255, 0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-
-.loading-spinner {
-  font-size: 3rem;
-  color: #4f46e5;
-  animation: spin 1.5s linear infinite;
-  margin-bottom: 20px;
-}
-
-.loading-text {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 8px;
-}
-
-.loading-subtext {
-  font-size: 0.9rem;
-  color: #6b7280;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
