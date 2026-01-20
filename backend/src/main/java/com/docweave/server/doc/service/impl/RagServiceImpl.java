@@ -4,6 +4,7 @@ import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
 import com.docweave.server.doc.dto.request.ChatRequestDto;
+import com.docweave.server.doc.dto.request.DocumentIngestionRequestDto;
 import com.docweave.server.doc.dto.response.ChatResponseDto;
 import com.docweave.server.doc.entity.ChatDocument;
 import com.docweave.server.doc.entity.ChatMessage;
@@ -17,7 +18,12 @@ import com.docweave.server.doc.repository.ChatDocumentRepository;
 import com.docweave.server.doc.repository.ChatMessageRepository;
 import com.docweave.server.doc.repository.ChatRoomRepository;
 import com.docweave.server.doc.repository.DocContentRepository;
+import com.docweave.server.doc.service.DocumentIngestionService;
 import com.docweave.server.doc.service.RagService;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +46,7 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.core.io.Resource;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,11 +63,13 @@ public class RagServiceImpl implements RagService {
     private final ChatMessageRepository chatMessageRepository;
     private final ChatDocumentRepository chatDocumentRepository;
     private final DocContentRepository docContentRepository;
+    private final DocumentIngestionService documentIngestionService;
 
     private static final int PARENT_CHUNK_SIZE = 1000;
     private static final int CHILD_CHUNK_SIZE = 300;
 
     private static final double SIMILARITY_THRESHOLD = 0.4;
+    private static final String TEMP_DIR = System.getProperty("java.io.tmpdir");
 
     @Override
     @Transactional(readOnly = true)
@@ -87,26 +97,34 @@ public class RagServiceImpl implements RagService {
     @Override
     @Transactional
     public ChatRoomDto createChatRoom(MultipartFile file) {
-        if (file.isEmpty()) throw new FileHandlingException(ErrorCode.FILE_EMPTY);
-        if (!Objects.requireNonNull(file.getOriginalFilename()).toLowerCase().endsWith(".pdf"))
-            throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
+        validateFile(file);
 
         try {
             // DB에 채팅방 생성
             ChatRoom chatRoom = chatRoomRepository.save(ChatRoom.builder()
                     .title(file.getOriginalFilename())
-                            .lastActiveAt(LocalDateTime.now())
+                    .lastActiveAt(LocalDateTime.now())
                     .build());
 
-            // Parent-Child 처리 로직 호출
-            processDocument(chatRoom, file);
-
-            // 첫 안내 메시지 저장
-            chatMessageRepository.save(ChatMessage.builder()
+            // 파일 메타데이터 RDB 저장
+            ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
                     .chatRoom(chatRoom)
-                    .role(ChatMessage.MessageRole.AI)
-                    .content("📂 **" + file.getOriginalFilename() + "** 분석이 완료되었습니다.\n질문해주세요!")
+                    .fileName(file.getOriginalFilename())
+                    .status(ChatDocument.ProcessingStatus.PENDING)
                     .build());
+
+            // 임시 파일 저장
+            String tempFilePath = saveTempFile(file);
+
+            DocumentIngestionRequestDto request = DocumentIngestionRequestDto.builder()
+                    .roomId(chatRoom.getId())
+                    .documentId(chatDocument.getId())
+                    .tempFilePath(tempFilePath)
+                    .originalFileName(file.getOriginalFilename())
+                    .build();
+
+            // 비동기 문서 처리 시작
+            documentIngestionService.processDocument(request);
 
             return ChatRoomDto.builder()
                     .id(chatRoom.getId())
@@ -123,20 +141,34 @@ public class RagServiceImpl implements RagService {
     @Override
     @Transactional
     public void addDocumentToRoom(Long roomId, MultipartFile file) {
+        validateFile(file);
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
         chatRoom.updateLastActiveAt();
 
         try {
-            // Parent-Child 처리 로직 호출
-            processDocument(chatRoom, file);
+            ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
+                    .chatRoom(chatRoom)
+                    .fileName(file.getOriginalFilename())
+                    .status(ChatDocument.ProcessingStatus.PENDING)
+                    .build());
 
-            // 시스템 메시지 추가 (사용자에게 알림)
+            String tempFilePath = saveTempFile(file);
+
+            DocumentIngestionRequestDto request = DocumentIngestionRequestDto.builder()
+                    .roomId(roomId)
+                    .documentId(chatDocument.getId())
+                    .tempFilePath(tempFilePath)
+                    .originalFileName(file.getOriginalFilename())
+                    .build();
+
+            documentIngestionService.processDocument(request);
+
             chatMessageRepository.save(ChatMessage.builder()
                     .chatRoom(chatRoom)
                     .role(ChatMessage.MessageRole.AI)
-                    .content("📎 **" + file.getOriginalFilename() + "** 문서가 추가되었습니다.")
+                    .content("📎 **" + file.getOriginalFilename() + "** 추가 분석을 시작합니다.")
                     .build());
 
         } catch (Exception e) {
@@ -237,54 +269,21 @@ public class RagServiceImpl implements RagService {
         chatRoomRepository.delete(chatRoom);
     }
 
-    private void processDocument(ChatRoom chatRoom, MultipartFile file) {
-        // 파일 메타데이터 RDB 저장
-        ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
-                .chatRoom(chatRoom)
-                .fileName(file.getOriginalFilename())
-                .build());
+    private void validateFile(MultipartFile file) {
+        if (file.isEmpty()) throw new FileHandlingException(ErrorCode.FILE_EMPTY);
 
-        // PDF 파싱
-        Resource resource = file.getResource();
-        PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
-        List<Document> rawDocuments = pdfReader.get();
+        if (!Objects.requireNonNull(file.getOriginalFilename()).toLowerCase().endsWith(".pdf"))
+            throw new FileHandlingException(ErrorCode.INVALID_FILE_EXTENSION);
+    }
 
-        if (rawDocuments.isEmpty()) throw new FileHandlingException(ErrorCode.DOCUMENT_PARSING_ERROR);
+    private String saveTempFile(MultipartFile file) throws IOException {
+        String originalName = file.getOriginalFilename();
+        String tempFileName = UUID.randomUUID() + "_" + originalName;
 
-        // Parent Chunking (1000 토큰)
-        TokenTextSplitter parentSplitter = new TokenTextSplitter(PARENT_CHUNK_SIZE, 100, 10, 1000, true);
-        List<Document> parentDocs = parentSplitter.apply(rawDocuments);
+        Path path = Path.of(TEMP_DIR, tempFileName);
+        Files.copy(file.getInputStream(), path, StandardCopyOption.REPLACE_EXISTING);
 
-        List<Document> childDocsToEmbed = new ArrayList<>();
-
-        // Parent 저장 및 Child 생성 루프
-        for (Document pDoc : parentDocs) {
-            // Parent를 RDB에 저장
-            Object pageNumObj = pDoc.getMetadata().getOrDefault("page_number", 0);
-            int pageNum = (pageNumObj instanceof Number) ? ((Number) pageNumObj).intValue() : 0;
-
-            DocContent savedParent = docContentRepository.save(DocContent.builder()
-                    .chatDocument(chatDocument)
-                    .content(pDoc.getText())
-                    .pageNumber(pageNum)
-                    .build());
-
-            // Child Chunking (300 토큰)
-            TokenTextSplitter childSplitter = new TokenTextSplitter(CHILD_CHUNK_SIZE, 50, 10, 100, true);
-            List<Document> childDocs = childSplitter.apply(Collections.singletonList(pDoc));
-
-            // Child에 Parent ID 태깅
-            for (Document cDoc : childDocs) {
-                cDoc.getMetadata().put("parent_id", savedParent.getId());
-                cDoc.getMetadata().put("roomId", chatRoom.getId());
-                cDoc.getMetadata().put("source_file", file.getOriginalFilename());
-                cDoc.getMetadata().put("page_number", pageNum);
-            }
-            childDocsToEmbed.addAll(childDocs);
-        }
-
-        // Child만 벡터 DB에 저장
-        vectorStore.add(childDocsToEmbed);
+        return path.toString();
     }
 
     private boolean validateResponse(String context, String answer) {
@@ -343,7 +342,7 @@ public class RagServiceImpl implements RagService {
                - 핵심 키워드는 **볼드체**로 강조하세요.
                - 나열되는 정보는 글머리 기호(-, 1.)를 사용하여 정리하세요.
                - 필요하다면 표(Table) 형식을 사용해도 좋습니다.
-            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 답변에는 반드시 **한국어와 영어**만 사용하세요. 중국어, 일본어 등의 언어를 사용하지 마세요.
+            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 
             
             [Context]
             {context}
