@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.weaver.patterns.TypePatternQuestions.Question;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -188,6 +190,15 @@ public class RagServiceImpl implements RagService {
                 .build());
 
         try {
+            // 대화 내역 조회 (최대 6개)
+            List<ChatMessage> chatHistoryList = chatMessageRepository.findTop6ByChatRoomIdOrderByCreatedAtDesc(roomId);
+            Collections.reverse(chatHistoryList);
+
+            // 대화 내역 포맷팅
+            String conversationHistory = chatHistoryList.stream()
+                    .map(msg -> String.format("%s: %s", msg.getRole(), msg.getContent()))
+                    .collect(Collectors.joining("\n"));
+
             // Vector Search: 질문과 유사한 'Child' 청크 검색
             List<Document> similarChildren = vectorStore.similaritySearch(
                     SearchRequest.builder()
@@ -217,7 +228,7 @@ public class RagServiceImpl implements RagService {
 
             // 프롬포트 생성
             PromptTemplate template = getPromptTemplate();
-            Prompt prompt = template.create(Map.of("context", context, "message", requestDto.getMessage()));
+            Prompt prompt = template.create(Map.of("history", conversationHistory, "context", context, "message", requestDto.getMessage()));
 
             log.info("Generating answer for room: {}", roomId);
             String rawAnswer = chatClient.prompt(prompt).call().content();
@@ -333,11 +344,15 @@ public class RagServiceImpl implements RagService {
             ## 지침 (Instructions)
             1. **근거 기반**: 오직 [Context]에 있는 내용만 사용하여 답변하세요. 외부 지식이나 상상을 섞지 마세요.
             2. **양심적 거절**: 만약 [Context]에 질문에 대한 답변이 포함되어 있지 않다면, 솔직하게 "제공된 문서에서 해당 내용을 찾을 수 없습니다."라고 답변하세요. 내용을 지어내지 마세요.
-            3. **구조화된 답변**: 답변은 가독성이 좋게 **Markdown** 문법을 사용하세요.
+            3. **맥락 파악**: [Previous Conversation]을 참고하여 질문의 맥락을 파악하세요.
+            4. **구조화된 답변**: 답변은 가독성이 좋게 **Markdown** 문법을 사용하세요.
                - 핵심 키워드는 **볼드체**로 강조하세요.
                - 나열되는 정보는 글머리 기호(-, 1.)를 사용하여 정리하세요.
                - 필요하다면 표(Table) 형식을 사용해도 좋습니다.
-            4. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요. 
+            5. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요.
+            
+            [Previous Conversation]
+            {history}
             
             [Context]
             {context}
