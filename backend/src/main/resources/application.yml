@@ -48,3 +48,6 @@ server:
 docweave:
   cors:
     allowed-origins: "http://localhost:5173"
+
+  optimization:
+    enabled: false

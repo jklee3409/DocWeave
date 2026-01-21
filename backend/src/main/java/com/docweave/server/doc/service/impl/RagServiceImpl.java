@@ -32,11 +32,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.aspectj.weaver.patterns.TypePatternQuestions.Question;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -44,8 +44,10 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StopWatch;
 import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
@@ -62,7 +64,11 @@ public class RagServiceImpl implements RagService {
     private final DocContentRepository docContentRepository;
     private final DocumentIngestionService documentIngestionService;
 
-    private static final int PARENT_CHUNK_SIZE = 1000;
+    // Feature Flag 주입
+    @Value("${docweave.optimization.enabled}")
+    private boolean useOptimization;
+
+    private static final int PARENT_CHUNK_SIZE = 800;
     private static final int CHILD_CHUNK_SIZE = 300;
 
     private static final double SIMILARITY_THRESHOLD = 0.4;
@@ -177,6 +183,10 @@ public class RagServiceImpl implements RagService {
     @Override
     @Transactional
     public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
+        // 성능 측정을 위한 StopWatch 시작
+        StopWatch stopWatch = new StopWatch("RAG Performance Check - Room " + roomId);
+
+        stopWatch.start("1. Basic Setup & Retrieval");
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
 
@@ -203,7 +213,7 @@ public class RagServiceImpl implements RagService {
             List<Document> similarChildren = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(requestDto.getMessage())
-                            .topK(3)
+                            .topK(2)
                             .filterExpression("roomId == " + roomId)
                             .build()
             );
@@ -218,28 +228,76 @@ public class RagServiceImpl implements RagService {
                     .collect(Collectors.toSet());
 
             // RDB에서 Parent 조회
-            String context = "";
+            String contextStr = "";
             if (!parentIds.isEmpty()) {
                 List<DocContent> parentContents = docContentRepository.findAllByIdIn(new ArrayList<>(parentIds));
-                context = parentContents.stream()
+                contextStr = parentContents.stream()
                         .map(DocContent::getContent)
                         .collect(Collectors.joining("\n\n"));
             }
 
+            final String finalContext = contextStr;
+
             // 프롬포트 생성
             PromptTemplate template = getPromptTemplate();
-            Prompt prompt = template.create(Map.of("history", conversationHistory, "context", context, "message", requestDto.getMessage()));
+            Prompt prompt = template.create(Map.of("history", conversationHistory, "context", finalContext, "message", requestDto.getMessage()));
+            stopWatch.stop(); // 1. Setup 완료
 
-            log.info("Generating answer for room: {}", roomId);
-            String rawAnswer = chatClient.prompt(prompt).call().content();
+            String rawAnswer = "";
+            boolean isValid = false;
 
-            if (rawAnswer == null || rawAnswer.isBlank()) {
-                throw new AiProcessingException(ErrorCode.AI_SERVICE_ERROR);
+            // Feature Flag에 따른 로직 분기
+            if (useOptimization) {
+                log.info("🚀 [Mode: Optimized] Executing Parallel Processing...");
+                stopWatch.start("2-A. Parallel Processing (LLM + Context Embed)");
+
+                // AI 응답 생성 및 컨텍스트 임베딩 병렬 처리
+                log.info("Generating answer for room: {}", roomId);
+                CompletableFuture<String> answerFuture = CompletableFuture.supplyAsync(() ->
+                        chatClient.prompt(prompt).call().content()
+                );
+
+                CompletableFuture<float[]> contextEmbeddingFuture = CompletableFuture.supplyAsync(() ->
+                        embeddingModel.embed(finalContext)
+                );
+
+                CompletableFuture.allOf(answerFuture, contextEmbeddingFuture).join();
+                stopWatch.stop();
+
+                rawAnswer = answerFuture.get();
+                float[] contextVector = contextEmbeddingFuture.get();
+
+                if (rawAnswer == null || rawAnswer.isBlank()) {
+                    throw new AiProcessingException(ErrorCode.AI_SERVICE_ERROR);
+                }
+
+                // 가드레일 검증 (Optimized: 이미 계산된 Vector 사용)
+                log.info("Validating answer quality for room: {}", roomId);
+                stopWatch.start("3-A. Validation (Optimized)");
+                isValid = validateResponse(contextVector, rawAnswer);
+                stopWatch.stop();
+
+            } else {
+                log.info("🐢 [Mode: Legacy] Executing Sequential Processing...");
+
+                // 순차 처리: LLM 호출
+                stopWatch.start("2-B. LLM Generation (Sequential)");
+                rawAnswer = chatClient.prompt(prompt).call().content();
+                stopWatch.stop();
+
+                if (rawAnswer == null || rawAnswer.isBlank()) {
+                    throw new AiProcessingException(ErrorCode.AI_SERVICE_ERROR);
+                }
+
+                // 가드레일 검증 (Legacy: 검증 시점에 Context 임베딩 수행)
+                log.info("Validating answer quality for room: {}", roomId);
+                stopWatch.start("3-B. Validation (Legacy)");
+                isValid = validateResponseLegacy(finalContext, rawAnswer);
+                stopWatch.stop();
             }
 
-            // 가드레일 검증 적용
-            log.info("Validating answer quality for room: {}", roomId);
-            boolean isValid = validateResponse(context, rawAnswer);
+            // 로그 출력
+            log.info(stopWatch.prettyPrint());
 
             if (!isValid) {
                 log.warn("Guardrail validation failed. RoomId: {}, Input: {}", roomId, requestDto.getMessage());
@@ -292,23 +350,40 @@ public class RagServiceImpl implements RagService {
         return path.toString();
     }
 
-    private boolean validateResponse(String context, String answer) {
-        // 규칙 기반 필터링 (빠른 차단)
+    // Optimized Validation (Context Vector를 인자로 받음)
+    private boolean validateResponse(float[] contextVector, String answer) {
+        // 규칙 기반 필터링
         if (answer.contains("제공된 문서에서 해당 내용을 찾을 수 없습니다")) return true;
         if (answer.length() < 5) return false;
 
         try {
-            // 임베딩 생성
-            float[] contextVector = embeddingModel.embed(context);
             float[] answerVector = embeddingModel.embed(answer);
 
-            // 코사인 유사도 계산
             double similarity = cosineSimilarity(contextVector, answerVector);
             log.debug("Validation Similarity Score: {}", similarity);
 
-            // 임계값 비교
             return similarity >= SIMILARITY_THRESHOLD;
+        } catch (Exception e) {
+            log.error("Similarity Calculation Failed", e);
+            return true;
+        }
+    }
 
+    // Legacy Validation (Context String을 받아 내부에서 임베딩 - 순차 처리 시뮬레이션용)
+    private boolean validateResponseLegacy(String contextStr, String answer) {
+        // 규칙 기반 필터링
+        if (answer.contains("제공된 문서에서 해당 내용을 찾을 수 없습니다")) return true;
+        if (answer.length() < 5) return false;
+
+        try {
+            // Legacy: 여기서 Context Embedding을 수행
+            float[] contextVector = embeddingModel.embed(contextStr);
+            float[] answerVector = embeddingModel.embed(answer);
+
+            double similarity = cosineSimilarity(contextVector, answerVector);
+            log.debug("Validation Similarity Score: {}", similarity);
+
+            return similarity >= SIMILARITY_THRESHOLD;
         } catch (Exception e) {
             log.error("Similarity Calculation Failed", e);
             return true;
