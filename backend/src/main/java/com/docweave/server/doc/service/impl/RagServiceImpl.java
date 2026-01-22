@@ -45,6 +45,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StopWatch;
@@ -67,6 +68,9 @@ public class RagServiceImpl implements RagService {
     // Feature Flag 주입
     @Value("${docweave.optimization.enabled}")
     private boolean useOptimization;
+
+    @Value("classpath:prompts/system-rag-prompt.st")
+    private Resource ragPromptResource;
 
     private static final int PARENT_CHUNK_SIZE = 800;
     private static final int CHILD_CHUNK_SIZE = 300;
@@ -239,7 +243,7 @@ public class RagServiceImpl implements RagService {
             final String finalContext = contextStr;
 
             // 프롬포트 생성
-            PromptTemplate template = getPromptTemplate();
+            PromptTemplate template = new PromptTemplate(ragPromptResource);
             Prompt prompt = template.create(Map.of("history", conversationHistory, "context", finalContext, "message", requestDto.getMessage()));
             stopWatch.stop(); // 1. Setup 완료
 
@@ -409,33 +413,5 @@ public class RagServiceImpl implements RagService {
 
         if (normA == 0 || normB == 0) return 0.0;
         return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-    }
-
-    private static @NonNull PromptTemplate getPromptTemplate() {
-        String promptText = """
-            당신은 'DocWeave' 라는 지능형 문서 분석 AI 어시스턴트입니다.
-            사용자의 질문에 대해 아래 제공된 [Context] 정보를 바탕으로 정확하고 전문적인 답변을 제공하세요.
-            
-            ## 지침 (Instructions)
-            1. **근거 기반**: 오직 [Context]에 있는 내용만 사용하여 답변하세요. 외부 지식이나 상상을 섞지 마세요.
-            2. **양심적 거절**: 만약 [Context]에 질문에 대한 답변이 포함되어 있지 않다면, 솔직하게 "제공된 문서에서 해당 내용을 찾을 수 없습니다."라고 답변하세요. 내용을 지어내지 마세요.
-            3. **맥락 파악**: [Previous Conversation]을 참고하여 질문의 맥락을 파악하세요.
-            4. **구조화된 답변**: 답변은 가독성이 좋게 **Markdown** 문법을 사용하세요.
-               - 핵심 키워드는 **볼드체**로 강조하세요.
-               - 나열되는 정보는 글머리 기호(-, 1.)를 사용하여 정리하세요.
-               - 필요하다면 표(Table) 형식을 사용해도 좋습니다.
-            5. **언어**: 한국어로 자연스럽고 정중하게(존댓말) 답변하세요.
-            
-            [Previous Conversation]
-            {history}
-            
-            [Context]
-            {context}
-            
-            [Question]
-            {message}
-            """;
-
-        return new PromptTemplate(promptText);
     }
 }
