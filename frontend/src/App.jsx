@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle } from 'react-icons/fa';
+import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle, FaGlobe, FaLayerGroup } from 'react-icons/fa';
 import './App.css';
 
 function App() {
@@ -223,37 +223,44 @@ function App() {
     return (
         <div className="app-container">
             <div className="sidebar">
-                <button className="new-chat-btn" onClick={handleNewChatClick}><FaPlus /> 새 문서 시작</button>
-                <div className="room-list-label">Recent Chats</div>
+                <div className="sidebar-header">
+                    <div className="sidebar-brand">
+                        <FaBrain /> <span>DocWeave</span>
+                    </div>
+                </div>
+                <button className="new-chat-btn" onClick={handleNewChatClick}>
+                    <FaPlus className="btn-icon" /> <span>New Chat</span>
+                </button>
                 <div className="room-list">
                     {rooms.map(room => (
                         <div key={room.id} className={`room-item ${currentRoomId === room.id ? 'active' : ''}`} onClick={() => setCurrentRoomId(room.id)}>
-                            <FaRegCommentDots />
+                            <FaRegCommentDots className="room-icon" />
                             <span className="room-item-title">{room.title}</span>
-                            <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash size={12} /></button>
+                            <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash size={10} /></button>
                         </div>
                     ))}
                 </div>
                 <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} />
+
+                <div className="sidebar-footer">
+                    <div className="footer-item"><FaGlobe /> <span>Explore</span></div>
+                    <div className="footer-item"><FaUser /> <span>Profile</span></div>
+                </div>
             </div>
 
-            <div className="main-content" style={{ position: 'relative' }}>
+            <div className="main-content">
                 <header className="app-header">
-                    <div className="brand" onClick={() => window.location.reload()}>
-                        <FaBrain size={24} color="#4f46e5" />
-                        <span>DocWeave</span>
-                        {currentRoomId && <span className="room-title-display">/ {rooms.find(r => r.id === currentRoomId)?.title}</span>}
-                    </div>
+                    {currentRoomId && <span className="room-title-display">{rooms.find(r => r.id === currentRoomId)?.title}</span>}
                     {uploadStatus === 'uploading' && (
                         <div className="status-badge uploading">
                             <FaSpinner className="spin-icon" />
-                            <span>업로드 요청 중...</span>
+                            <span>Processing Document...</span>
                         </div>
                     )}
                     {uploadStatus === 'done' && (
                         <div className="status-badge done">
                             <FaCheckCircle />
-                            <span>요청 완료</span>
+                            <span>Ready</span>
                         </div>
                     )}
                 </header>
@@ -261,9 +268,22 @@ function App() {
                 <div className="chat-feed">
                     {!currentRoomId ? (
                         <div className="empty-state">
-                            <FaBrain className="logo-large" />
-                            <h1 className="empty-title">무엇을 도와드릴까요?</h1>
-                            <p className="empty-desc"><strong>'새 문서 시작'</strong> 버튼을 눌러 PDF를 업로드하세요.<br/>백그라운드에서 분석되는 동안 다른 작업을 할 수 있습니다.</p>
+                            <div className="logo-wrapper">
+                                <FaBrain className="logo-large" />
+                            </div>
+                            <h1 className="empty-title">DocWeave</h1>
+                            <div className="empty-search-bar" onClick={() => fileInputRef.current.click()}>
+                                <FaFilePdf className="search-icon" />
+                                <span>무엇을 알고 싶으세요? PDF 업로드하기</span>
+                                <div className="search-actions">
+                                    <FaPaperPlane />
+                                </div>
+                            </div>
+                            <div className="suggestion-chips">
+                                <div className="chip">문서 요약하기</div>
+                                <div className="chip">핵심 키워드 추출</div>
+                                <div className="chip">번역 및 분석</div>
+                            </div>
                         </div>
                     ) : (
                         <div className="message-list">
@@ -274,17 +294,17 @@ function App() {
                                 const htmlContent = marked.parse(processedContent);
 
                                 return (
-                                    <div key={index} className="message-row">
-                                        <div className={`avatar ${msg.role}`}>
-                                            {msg.role === 'ai' ? <FaRobot /> : <FaUser size={14} />}
-                                        </div>
-                                        <div className="message-content">
-                                            <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
-                                            <div
-                                                className="markdown-content"
-                                                dangerouslySetInnerHTML={{ __html: htmlContent }}
-                                            />
-                                            {isStreamingMessage && <span className="typing-cursor">▎</span>}
+                                    <div key={index} className={`message-row ${msg.role}`}>
+                                        <div className="message-container">
+                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain /></div>}
+                                            <div className="message-content">
+                                                <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
+                                                <div
+                                                    className="markdown-content"
+                                                    dangerouslySetInnerHTML={{ __html: htmlContent }}
+                                                />
+                                                {isStreamingMessage && <span className="typing-cursor">●</span>}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -298,14 +318,14 @@ function App() {
                     <div className="input-container">
                         <div className="input-wrapper">
                             <button className="file-btn" onClick={() => fileInputRef.current.click()}>
-                                <FaFilePdf size={18} />
+                                <FaPlus size={16} />
                             </button>
                             <textarea
                                 ref={textareaRef}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="질문하세요..."
+                                placeholder="무엇을 알고 싶으세요?"
                                 disabled={isLoading}
                                 rows={1}
                             />
@@ -313,6 +333,7 @@ function App() {
                                 <FaPaperPlane size={16} />
                             </button>
                         </div>
+                        <div className="footer-note">AI는 실수를 할 수 있습니다. 중요한 정보를 확인하세요.</div>
                     </div>
                 )}
             </div>
