@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { FaPaperPlane, FaPlus, FaBrain, FaRobot, FaUser, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle, FaGlobe, FaLayerGroup } from 'react-icons/fa';
+import { FaPaperPlane, FaPlus, FaBrain, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle, FaGlobe, FaUser } from 'react-icons/fa';
 import './App.css';
 
 function App() {
@@ -17,7 +17,10 @@ function App() {
     const textareaRef = useRef(null);
 
     useEffect(() => {
-        marked.setOptions({ breaks: true, gfm: true });
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
         fetchRooms();
     }, []);
 
@@ -111,13 +114,12 @@ function App() {
     };
 
     const animateTyping = async (fullText) => {
-        const speed = 20;
+        const speed = 10;
         let displayedText = '';
-        const chars = fullText.split('');
 
-        for (let i = 0; i < chars.length; i++) {
+        for (let i = 0; i < fullText.length; i += 2) {
             await new Promise(resolve => setTimeout(resolve, speed));
-            displayedText += chars[i];
+            displayedText += fullText.slice(i, i + 2);
 
             setMessages(prev => {
                 const newMessages = [...prev];
@@ -131,13 +133,18 @@ function App() {
                 return newMessages;
             });
         }
-    };
 
-    const preprocessMarkdown = (text) => {
-        if (!text) return '';
-        let processed = text.replace(/(?<!\n)(\s*)(\*|-|\d+\.) /g, '\n\n$2 ');
-        processed = processed.replace(/(\n)(\s*)(\*|-|\d+\.) /g, '\n\n$3 ');
-        return processed;
+        setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMsgIndex = newMessages.length - 1;
+            if (lastMsgIndex >= 0 && newMessages[lastMsgIndex].role === 'ai') {
+                newMessages[lastMsgIndex] = {
+                    ...newMessages[lastMsgIndex],
+                    content: fullText
+                };
+            }
+            return newMessages;
+        });
     };
 
     const handleSend = async () => {
@@ -290,8 +297,7 @@ function App() {
                             {messages.map((msg, index) => {
                                 const isStreamingMessage = msg.isStreaming && isLoading;
                                 const rawContent = msg.content || '';
-                                const processedContent = preprocessMarkdown(rawContent);
-                                const htmlContent = marked.parse(processedContent);
+                                const htmlContent = marked.parse(rawContent);
 
                                 return (
                                     <div key={index} className={`message-row ${msg.role}`}>
