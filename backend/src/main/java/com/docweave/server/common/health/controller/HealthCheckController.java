@@ -1,20 +1,20 @@
 package com.docweave.server.common.health.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api")
 public class HealthCheckController {
 
-    private final ChatModel chatModel;
-
-    public HealthCheckController(ChatModel chatModel) {
-        this.chatModel = chatModel;
-    }
+    private final OpenAiChatModel chatModel;
 
     @GetMapping("/health")
     public Map<String, String> healthCheck() {

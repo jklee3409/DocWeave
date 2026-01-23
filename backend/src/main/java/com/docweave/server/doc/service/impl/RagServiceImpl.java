@@ -7,7 +7,9 @@ import com.docweave.server.doc.dto.request.ChatRequestDto;
 import com.docweave.server.doc.dto.request.DocumentIngestionRequestDto;
 import com.docweave.server.doc.dto.response.ChatResponseDto;
 import com.docweave.server.doc.entity.ChatDocument;
+import com.docweave.server.doc.entity.ChatDocument.ProcessingStatus;
 import com.docweave.server.doc.entity.ChatMessage;
+import com.docweave.server.doc.entity.ChatMessage.MessageRole;
 import com.docweave.server.doc.entity.ChatRoom;
 import com.docweave.server.doc.entity.DocContent;
 import com.docweave.server.doc.exception.AiProcessingException;
@@ -42,8 +44,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -58,6 +62,7 @@ public class RagServiceImpl implements RagService {
 
     private final VectorStore vectorStore;
     private final ChatClient chatClient;
+    @Qualifier("ollamaEmbeddingModel")
     private final EmbeddingModel embeddingModel;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -117,7 +122,7 @@ public class RagServiceImpl implements RagService {
             ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
                     .chatRoom(chatRoom)
                     .fileName(file.getOriginalFilename())
-                    .status(ChatDocument.ProcessingStatus.PENDING)
+                    .status(ProcessingStatus.PENDING)
                     .build());
 
             // 임시 파일 저장
@@ -158,7 +163,7 @@ public class RagServiceImpl implements RagService {
             ChatDocument chatDocument = chatDocumentRepository.save(ChatDocument.builder()
                     .chatRoom(chatRoom)
                     .fileName(file.getOriginalFilename())
-                    .status(ChatDocument.ProcessingStatus.PENDING)
+                    .status(ProcessingStatus.PENDING)
                     .build());
 
             String tempFilePath = saveTempFile(file);
@@ -174,7 +179,7 @@ public class RagServiceImpl implements RagService {
 
             chatMessageRepository.save(ChatMessage.builder()
                     .chatRoom(chatRoom)
-                    .role(ChatMessage.MessageRole.AI)
+                    .role(MessageRole.AI)
                     .content("📎 **" + file.getOriginalFilename() + "** 추가 분석을 시작합니다.")
                     .build());
 
@@ -199,7 +204,7 @@ public class RagServiceImpl implements RagService {
         // 사용자 질문 DB 저장
         chatMessageRepository.save(ChatMessage.builder()
                 .chatRoom(chatRoom)
-                .role(ChatMessage.MessageRole.USER)
+                .role(MessageRole.USER)
                 .content(requestDto.getMessage())
                 .build());
 
@@ -311,7 +316,7 @@ public class RagServiceImpl implements RagService {
             // 검증 통과 시 DB 저장
             chatMessageRepository.save(ChatMessage.builder()
                     .chatRoom(chatRoom)
-                    .role(ChatMessage.MessageRole.AI)
+                    .role(MessageRole.AI)
                     .content(rawAnswer)
                     .build());
 

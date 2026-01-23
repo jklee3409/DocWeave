@@ -34,8 +34,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
-    // Ollama
+    // AI
     implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
     // PDF Reader
     implementation 'org.springframework.ai:spring-ai-pdf-document-reader'
