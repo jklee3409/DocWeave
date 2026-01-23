@@ -15,7 +15,7 @@ public class EmbeddingModelConfig {
 
     @Bean
     @Primary
-    public EmbeddingModel ollamaEmbeddingModel(OllamaApi ollamaApi) {
+    public EmbeddingModel customEmbeddingModel(OllamaApi ollamaApi) {
        var options = OllamaEmbeddingOptions.builder()
                .model("bge-m3")
                 .build();

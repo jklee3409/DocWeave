@@ -69,7 +69,7 @@ public class RagServiceImpl implements RagService {
     @Value("classpath:prompts/system-rag-prompt.st")
     private Resource ragPromptResource;
 
-    private static final int PARENT_CHUNK_SIZE = 800;
+    private static final int PARENT_CHUNK_SIZE = 700;
     private static final int CHILD_CHUNK_SIZE = 300;
 
     private static final double SIMILARITY_THRESHOLD = 0.4;
