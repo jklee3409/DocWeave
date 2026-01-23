@@ -40,15 +40,10 @@ spring:
         options:
           model: llama-3.3-70b-versatile
           temperature: 0.3
-      embedding:
-        enabled: false
 
     ollama:
       base-url: {OLLAMA_BASE_URL}
-      chat:
-        enabled: false
       embedding:
-        enabled: true
         options:
           model: bge-m3
 

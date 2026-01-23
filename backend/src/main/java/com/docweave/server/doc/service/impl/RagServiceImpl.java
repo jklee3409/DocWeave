@@ -62,7 +62,6 @@ public class RagServiceImpl implements RagService {
 
     private final VectorStore vectorStore;
     private final ChatClient chatClient;
-    @Qualifier("ollamaEmbeddingModel")
     private final EmbeddingModel embeddingModel;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
