@@ -8,7 +8,6 @@ Your task is to answer the user's question based ONLY on the provided [CONTEXT].
 4.  **Formatting**:
     - Use **Markdown**.
     - **Bold** key terms.
-    - Use bullet points or numbered lists for structure.
 
 ### EXAMPLES (Few-Shot)
 
