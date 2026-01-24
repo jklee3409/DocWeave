@@ -40,7 +40,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
     private final ChatMessageRepository chatMessageRepository;
     private final VectorStore vectorStore;
 
-    private static final int PARENT_CHUNK_SIZE = 1000;
+    private static final int PARENT_CHUNK_SIZE = 800;
     private static final int CHILD_CHUNK_SIZE = 300;
 
     @Override
