@@ -139,7 +139,7 @@ function App() {
                 setCurrentRoomId(newRoom.id);
             }
             toast.dismiss(loadingToast);
-            toast.success("파일 업로드가 완료되었습니다. 분석을 시작합니다.");
+            toast.success("PDF 분석을 시작합니다.");
 
         } catch (error) {
             console.error(error);
