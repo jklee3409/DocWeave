@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { marked } from 'marked';
-import { FaPaperPlane, FaPlus, FaBrain, FaRegCommentDots, FaFilePdf, FaTrash, FaSpinner, FaCheckCircle, FaGlobe, FaUser } from 'react-icons/fa';
+import { Toaster, toast } from 'react-hot-toast';
+import {
+    FaPaperPlane, FaPlus, FaBrain, FaRegCommentDots, FaFilePdf, FaTrash,
+    FaSpinner, FaCheckCircle, FaGlobe, FaUser, FaRegCopy,
+    FaRegThumbsUp, FaRegThumbsDown
+} from 'react-icons/fa';
 import './App.css';
 
 function App() {
@@ -45,7 +50,7 @@ function App() {
     }, [currentRoomId, isLoading]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     useEffect(() => {
@@ -69,6 +74,7 @@ function App() {
                 } else if (lastMsg.content.includes('오류가 발생했습니다')) {
                     setIsProcessing(false);
                     setUploadStatus(null);
+                    toast.error("문서 분석 중 오류가 발생했습니다.");
                 }
             } else {
                 setIsProcessing(false);
@@ -81,7 +87,8 @@ function App() {
             const res = await axios.get('http://localhost:8080/api/doc/rooms');
             setRooms(res.data.data);
         } catch (err) {
-            console.error("Failed to fetch rooms", err);
+            console.error(err);
+            toast.error("채팅방 목록을 불러오지 못했습니다.");
         }
     };
 
@@ -96,7 +103,7 @@ function App() {
                 return res.data.data;
             });
         } catch (err) {
-            console.error("Failed to fetch messages", err);
+            console.error(err);
         }
     };
 
@@ -109,10 +116,12 @@ function App() {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
+        const loadingToast = toast.loading("파일을 업로드하고 있습니다...");
+
         try {
             if (currentRoomId) {
                 await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/files`, formData, {
-                    headers: {'Content-Type': 'multipart/form-data'}
+                    headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 fetchMessages(currentRoomId);
 
@@ -123,15 +132,19 @@ function App() {
                 });
             } else {
                 const res = await axios.post('http://localhost:8080/api/doc/rooms', formData, {
-                    headers: {'Content-Type': 'multipart/form-data'}
+                    headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 const newRoom = res.data.data;
                 setRooms([newRoom, ...rooms]);
                 setCurrentRoomId(newRoom.id);
             }
+            toast.dismiss(loadingToast);
+            toast.success("파일 업로드가 완료되었습니다. 분석을 시작합니다.");
+
         } catch (error) {
             console.error(error);
-            alert('업로드 요청 실패');
+            toast.dismiss(loadingToast);
+            toast.error("업로드 요청에 실패했습니다.");
             setUploadStatus(null);
             setIsProcessing(false);
         } finally {
@@ -182,8 +195,8 @@ function App() {
 
         setMessages(prev => [
             ...prev,
-            {role: 'user', content: userMessage},
-            {role: 'ai', content: '', isStreaming: true}
+            { role: 'user', content: userMessage },
+            { role: 'ai', content: '', isStreaming: true }
         ]);
 
         setRooms(prevRooms => {
@@ -229,6 +242,7 @@ function App() {
                 }
                 return newMessages;
             });
+            toast.error("답변 생성 중 오류가 발생했습니다.");
         } finally {
             setIsLoading(false);
         }
@@ -236,7 +250,7 @@ function App() {
 
     const handleDeleteRoom = async (e, roomId) => {
         e.stopPropagation();
-        if (!window.confirm("삭제하시겠습니까?")) return;
+        if (!window.confirm("정말로 이 채팅방을 삭제하시겠습니까?")) return;
         try {
             await axios.delete(`http://localhost:8080/api/doc/rooms/${roomId}`);
             setRooms(prev => prev.filter(room => room.id !== roomId));
@@ -244,8 +258,9 @@ function App() {
                 setCurrentRoomId(null);
                 setMessages([]);
             }
+            toast.success("채팅방이 삭제되었습니다.");
         } catch (error) {
-            alert("삭제 실패");
+            toast.error("채팅방 삭제에 실패했습니다.");
         }
     };
 
@@ -263,33 +278,57 @@ function App() {
         }, 0);
     };
 
+    const handleCopy = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            toast.success("클립보드에 복사되었습니다.", {
+                style: {
+                    borderRadius: '10px',
+                    background: '#333',
+                    color: '#fff',
+                },
+            });
+        });
+    };
+
+    const handleFeedback = (type) => {
+        toast.success(type === 'like' ? "Thanks for your feedback!" : "Thanks for your feedback!", {
+            icon: type === 'like' ? '👍' : '👎',
+            style: {
+                borderRadius: '10px',
+                background: '#333',
+                color: '#fff',
+            },
+        });
+    };
+
     return (
         <div className="app-container">
+            <Toaster position="top-center" />
             <div className="sidebar">
                 <div className="sidebar-header">
                     <div className="sidebar-brand">
-                        <FaBrain/> <span>DocWeave</span>
+                        <FaBrain /> <span>DocWeave</span>
                     </div>
                 </div>
                 <button className="new-chat-btn" onClick={handleNewChatClick}>
-                    <FaPlus className="btn-icon"/> <span>New Chat</span>
+                    <FaPlus className="btn-icon" /> <span>New Chat</span>
                 </button>
                 <div className="room-list">
                     {rooms.map(room => (
                         <div key={room.id} className={`room-item ${currentRoomId === room.id ? 'active' : ''}`}
                              onClick={() => setCurrentRoomId(room.id)}>
-                            <FaRegCommentDots className="room-icon"/>
+                            <FaRegCommentDots className="room-icon" />
                             <span className="room-item-title">{room.title}</span>
                             <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash
-                                size={10}/></button>
+                                size={10} /></button>
                         </div>
                     ))}
                 </div>
-                <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{display: 'none'}}/>
+                <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} />
 
                 <div className="sidebar-footer">
-                    <div className="footer-item"><FaGlobe/> <span>Explore</span></div>
-                    <div className="footer-item"><FaUser/> <span>Profile</span></div>
+                    <div className="footer-item"><FaGlobe /> <span>Explore</span></div>
+                    <div className="footer-item"><FaUser /> <span>Profile</span></div>
                 </div>
             </div>
 
@@ -299,13 +338,13 @@ function App() {
                         <span className="room-title-display">{rooms.find(r => r.id === currentRoomId)?.title}</span>}
                     {uploadStatus === 'uploading' && (
                         <div className="status-badge uploading">
-                            <FaSpinner className="spin-icon"/>
+                            <FaSpinner className="spin-icon" />
                             <span>Processing Document...</span>
                         </div>
                     )}
                     {uploadStatus === 'done' && (
                         <div className="status-badge done">
-                            <FaCheckCircle/>
+                            <FaCheckCircle />
                             <span>Ready</span>
                         </div>
                     )}
@@ -315,14 +354,14 @@ function App() {
                     {!currentRoomId ? (
                         <div className="empty-state">
                             <div className="logo-wrapper">
-                                <FaBrain className="logo-large"/>
+                                <FaBrain className="logo-large" />
                             </div>
                             <h1 className="empty-title">DocWeave</h1>
                             <div className="empty-search-bar" onClick={() => fileInputRef.current.click()}>
-                                <FaFilePdf className="search-icon"/>
+                                <FaFilePdf className="search-icon" />
                                 <span>무엇을 알고 싶으세요? PDF 업로드하기</span>
                                 <div className="search-actions">
-                                    <FaPaperPlane/>
+                                    <FaPaperPlane />
                                 </div>
                             </div>
                             <div className="suggestion-chips">
@@ -341,21 +380,39 @@ function App() {
                                 return (
                                     <div key={index} className={`message-row ${msg.role}`}>
                                         <div className="message-container">
-                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain/></div>}
+                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain /></div>}
                                             <div className="message-content">
-                                                <div
-                                                    className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
+                                                <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
                                                 <div
                                                     className="markdown-content"
-                                                    dangerouslySetInnerHTML={{__html: htmlContent}}
+                                                    dangerouslySetInnerHTML={{ __html: htmlContent }}
                                                 />
                                                 {isStreamingMessage && <span className="typing-cursor">●</span>}
+
+                                                {msg.role === 'ai' && !isStreamingMessage && (
+                                                    <div className="ai-response-footer">
+                                                        <div className="response-divider"></div>
+                                                        <div className="footer-actions">
+                                                            <div className="feedback-buttons">
+                                                                <button className="icon-action-btn" onClick={() => handleFeedback('like')} title="좋아요">
+                                                                    <FaRegThumbsUp />
+                                                                </button>
+                                                                <button className="icon-action-btn" onClick={() => handleFeedback('dislike')} title="싫어요">
+                                                                    <FaRegThumbsDown />
+                                                                </button>
+                                                            </div>
+                                                            <button className="icon-action-btn" onClick={() => handleCopy(rawContent)} title="복사하기">
+                                                                <FaRegCopy />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 );
                             })}
-                            <div ref={messagesEndRef}/>
+                            <div ref={messagesEndRef} />
                         </div>
                     )}
                 </div>
@@ -365,7 +422,7 @@ function App() {
                         <div className="input-wrapper">
                             <button className="file-btn" onClick={() => fileInputRef.current.click()}
                                     disabled={isProcessing}>
-                                <FaPlus size={16}/>
+                                <FaPlus size={16} />
                             </button>
                             <textarea
                                 ref={textareaRef}
@@ -378,7 +435,7 @@ function App() {
                             />
                             <button className="send-btn" onClick={handleSend}
                                     disabled={isLoading || !input.trim() || isProcessing}>
-                                <FaPaperPlane size={16}/>
+                                <FaPaperPlane size={16} />
                             </button>
                         </div>
                         <div className="footer-note">AI는 실수를 할 수 있습니다. 중요한 정보를 확인하세요.</div>
