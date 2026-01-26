@@ -1,5 +1,6 @@
 package com.docweave.server.doc.service.queue;
 
+import com.docweave.server.common.constant.RedisConstant;
 import com.docweave.server.doc.dto.request.DocumentIngestionRequestDto;
 import com.docweave.server.doc.service.component.DocumentProcessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,13 +20,11 @@ public class IngestionWorker {
     private final DocumentProcessor documentProcessor;
     private final ObjectMapper objectMapper;
 
-    private static final String QUEUE_NAME = "doc_ingestion_queue";
-
     @Scheduled(fixedDelay = 1000)
     public void consume() {
         try {
             // 2초 동안 대기하며 큐에서 메시지 가져오기 (있으면 즉시 반환)
-            Object rawMessage = redisTemplate.opsForList().leftPop(QUEUE_NAME, 2, TimeUnit.SECONDS);
+            Object rawMessage = redisTemplate.opsForList().leftPop(RedisConstant.DOC_INGESTION_QUEUE, 2, TimeUnit.SECONDS);
 
             if (rawMessage != null) {
                 DocumentIngestionRequestDto requestDto = objectMapper.convertValue(rawMessage,

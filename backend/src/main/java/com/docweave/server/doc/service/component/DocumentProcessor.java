@@ -1,5 +1,6 @@
 package com.docweave.server.doc.service.component;
 
+import com.docweave.server.common.constant.EmbeddingConstant;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.request.DocumentIngestionRequestDto;
 import com.docweave.server.doc.entity.ChatDocument;
@@ -38,9 +39,6 @@ public class DocumentProcessor {
     private final ChatMessageRepository chatMessageRepository;
     private final VectorStore vectorStore;
 
-    private static final int PARENT_CHUNK_SIZE = 800;
-    private static final int CHILD_CHUNK_SIZE = 300;
-
     @Transactional
     public void execute(DocumentIngestionRequestDto request) {
         log.info("Starting document processing for docId: {}", request.getDocumentId());
@@ -66,7 +64,7 @@ public class DocumentProcessor {
                 throw new FileHandlingException(ErrorCode.FILE_EMPTY);
 
             // Parent-Child Chunking
-            TokenTextSplitter parentSplitter = new TokenTextSplitter(PARENT_CHUNK_SIZE, 100, 10, 1000, true);
+            TokenTextSplitter parentSplitter = new TokenTextSplitter(EmbeddingConstant.PARENT_CHUNK_SIZE, 100, 10, 1000, true);
             List<Document> parentDocs = parentSplitter.apply(rawDocuments);
             List<Document> childDocsToEmbed = new ArrayList<>();
 
@@ -80,7 +78,7 @@ public class DocumentProcessor {
                         .build());
 
                 // Child Chunking & Tagging
-                TokenTextSplitter childSplitter = new TokenTextSplitter(CHILD_CHUNK_SIZE, 50, 10, 100, true);
+                TokenTextSplitter childSplitter = new TokenTextSplitter(EmbeddingConstant.CHILD_CHUNK_SIZE, 50, 10, 100, true);
                 List<Document> childDocs = childSplitter.apply(Collections.singletonList(pDoc));
 
                 for (Document cDoc : childDocs) {
