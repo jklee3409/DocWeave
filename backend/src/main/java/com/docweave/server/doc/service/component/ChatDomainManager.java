@@ -40,7 +40,7 @@ public class ChatDomainManager {
 
     @Transactional(readOnly = true)
     public List<ChatMessageDto> getChatMessages(Long roomId) {
-        return chatMessageRepository.findAllByChatRoomIdOrderByCreatedAtAsc(roomId).stream()
+        return chatMessageRepository.findAllByChatRoomIdOrderByCreatedAtAscIdAsc(roomId).stream()
                 .map(msg -> ChatMessageDto.builder()
                         .role(msg.getRole().name().toLowerCase())
                         .content(msg.getContent())
