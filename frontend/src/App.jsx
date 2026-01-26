@@ -1,111 +1,47 @@
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
 import { marked } from 'marked';
 import { Toaster, toast } from 'react-hot-toast';
-import {
-    FaPaperPlane, FaPlus, FaBrain, FaRegCommentDots, FaFilePdf, FaTrash,
-    FaSpinner, FaCheckCircle, FaGlobe, FaUser, FaRegCopy,
-    FaRegThumbsUp, FaRegThumbsDown
-} from 'react-icons/fa';
+import { useChatRoom } from './hooks/useChatRoom';
+import { api } from './services/api';
+import Sidebar from './components/Sidebar';
+import ChatHeader from './components/ChatHeader';
+import ChatMessage from './components/ChatMessage';
+import ChatInput from './components/ChatInput';
+import EmptyState from './components/EmptyState';
 import './App.css';
 
 function App() {
-    const [rooms, setRooms] = useState([]);
-    const [currentRoomId, setCurrentRoomId] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [uploadStatus, setUploadStatus] = useState(null);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const {
+        rooms,
+        setRooms,
+        currentRoomId,
+        setCurrentRoomId,
+        messages,
+        setMessages,
+        isLoading,
+        setIsLoading,
+        uploadStatus,
+        setUploadStatus,
+        isProcessing,
+        setIsProcessing,
+        fetchMessages,
+        moveRoomToTop
+    } = useChatRoom();
 
+    const [input, setInput] = useState('');
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
-    const textareaRef = useRef(null);
 
     useEffect(() => {
         marked.setOptions({
             breaks: true,
             gfm: true
         });
-        fetchRooms();
     }, []);
-
-    useEffect(() => {
-        if (currentRoomId) {
-            fetchMessages(currentRoomId);
-        } else {
-            setMessages([]);
-            setIsProcessing(false);
-        }
-    }, [currentRoomId]);
-
-    useEffect(() => {
-        let intervalId;
-        if (currentRoomId && !isLoading) {
-            intervalId = setInterval(() => {
-                fetchMessages(currentRoomId, true);
-            }, 3000);
-        }
-        return () => clearInterval(intervalId);
-    }, [currentRoomId, isLoading]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-        }
-    }, [input]);
-
-    useEffect(() => {
-        if (messages.length > 0) {
-            const lastMsg = messages[messages.length - 1];
-            if (lastMsg.role === 'ai') {
-                if (lastMsg.content.includes('분석을 시작합니다')) {
-                    setIsProcessing(true);
-                    setUploadStatus('uploading');
-                } else if (lastMsg.content.includes('분석이 완료되었습니다')) {
-                    setIsProcessing(false);
-                    setUploadStatus('done');
-                    setTimeout(() => setUploadStatus(null), 3000);
-                } else if (lastMsg.content.includes('오류가 발생했습니다')) {
-                    setIsProcessing(false);
-                    setUploadStatus(null);
-                    toast.error("문서 분석 중 오류가 발생했습니다.");
-                }
-            } else {
-                setIsProcessing(false);
-            }
-        }
-    }, [messages]);
-
-    const fetchRooms = async () => {
-        try {
-            const res = await axios.get('http://localhost:8080/api/doc/rooms');
-            setRooms(res.data.data);
-        } catch (err) {
-            console.error(err);
-            toast.error("채팅방 목록을 불러오지 못했습니다.");
-        }
-    };
-
-    const fetchMessages = async (roomId, isSilent = false) => {
-        try {
-            if (isLoading && isSilent) return;
-
-            const res = await axios.get(`http://localhost:8080/api/doc/rooms/${roomId}/messages`);
-
-            setMessages(prev => {
-                if (isSilent && prev.length === res.data.data.length) return prev;
-                return res.data.data;
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    };
 
     const handleUpload = async (e) => {
         const selectedFile = e.target.files[0];
@@ -119,25 +55,16 @@ function App() {
         const loadingToast = toast.loading("파일을 업로드하고 있습니다...");
 
         try {
-            if (currentRoomId) {
-                await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/files`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                fetchMessages(currentRoomId);
+            const newRoom = await api.uploadFile(currentRoomId, formData);
 
-                setRooms(prevRooms => {
-                    const targetRoom = prevRooms.find(r => r.id === currentRoomId);
-                    const otherRooms = prevRooms.filter(r => r.id !== currentRoomId);
-                    return targetRoom ? [targetRoom, ...otherRooms] : prevRooms;
-                });
+            if (currentRoomId) {
+                fetchMessages(currentRoomId);
+                moveRoomToTop(currentRoomId);
             } else {
-                const res = await axios.post('http://localhost:8080/api/doc/rooms', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                const newRoom = res.data.data;
                 setRooms([newRoom, ...rooms]);
                 setCurrentRoomId(newRoom.id);
             }
+
             toast.dismiss(loadingToast);
             toast.success("PDF 분석을 시작합니다.");
 
@@ -199,20 +126,11 @@ function App() {
             { role: 'ai', content: '', isStreaming: true }
         ]);
 
-        setRooms(prevRooms => {
-            const targetRoom = prevRooms.find(r => r.id === currentRoomId);
-            const otherRooms = prevRooms.filter(r => r.id !== currentRoomId);
-            return targetRoom ? [targetRoom, ...otherRooms] : prevRooms;
-        });
-
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        moveRoomToTop(currentRoomId);
 
         try {
-            const response = await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/chat`, {
-                message: userMessage
-            });
+            const responseData = await api.sendMessage(currentRoomId, userMessage);
 
-            const responseData = response.data;
             if (responseData && responseData.data) {
                 await animateTyping(responseData.data.answer);
             }
@@ -252,7 +170,7 @@ function App() {
         e.stopPropagation();
         if (!window.confirm("정말로 이 채팅방을 삭제하시겠습니까?")) return;
         try {
-            await axios.delete(`http://localhost:8080/api/doc/rooms/${roomId}`);
+            await api.deleteRoom(roomId);
             setRooms(prev => prev.filter(room => room.id !== roomId));
             if (currentRoomId === roomId) {
                 setCurrentRoomId(null);
@@ -304,144 +222,61 @@ function App() {
     return (
         <div className="app-container">
             <Toaster position="top-center" />
-            <div className="sidebar">
-                <div className="sidebar-header">
-                    <div className="sidebar-brand">
-                        <FaBrain /> <span>DocWeave</span>
-                    </div>
-                </div>
-                <button className="new-chat-btn" onClick={handleNewChatClick}>
-                    <FaPlus className="btn-icon" /> <span>New Chat</span>
-                </button>
-                <div className="room-list">
-                    {rooms.map(room => (
-                        <div key={room.id} className={`room-item ${currentRoomId === room.id ? 'active' : ''}`}
-                             onClick={() => setCurrentRoomId(room.id)}>
-                            <FaRegCommentDots className="room-icon" />
-                            <span className="room-item-title">{room.title}</span>
-                            <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash
-                                size={10} /></button>
-                        </div>
-                    ))}
-                </div>
-                <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} />
 
-                <div className="sidebar-footer">
-                    <div className="footer-item"><FaGlobe /> <span>Explore</span></div>
-                    <div className="footer-item"><FaUser /> <span>Profile</span></div>
-                </div>
-            </div>
+            <Sidebar
+                rooms={rooms}
+                currentRoomId={currentRoomId}
+                onRoomSelect={setCurrentRoomId}
+                onNewChat={handleNewChatClick}
+                onDeleteRoom={handleDeleteRoom}
+                fileInputRef={fileInputRef}
+            />
 
             <div className="main-content">
-                <header className="app-header">
-                    {currentRoomId &&
-                        <span className="room-title-display">{rooms.find(r => r.id === currentRoomId)?.title}</span>}
-                    {uploadStatus === 'uploading' && (
-                        <div className="status-badge uploading">
-                            <FaSpinner className="spin-icon" />
-                            <span>Processing Document...</span>
-                        </div>
-                    )}
-                    {uploadStatus === 'done' && (
-                        <div className="status-badge done">
-                            <FaCheckCircle />
-                            <span>Ready</span>
-                        </div>
-                    )}
-                </header>
+                <ChatHeader
+                    roomTitle={rooms.find(r => r.id === currentRoomId)?.title}
+                    uploadStatus={uploadStatus}
+                />
 
                 <div className="chat-feed">
                     {!currentRoomId ? (
-                        <div className="empty-state">
-                            <div className="logo-wrapper">
-                                <FaBrain className="logo-large" />
-                            </div>
-                            <h1 className="empty-title">DocWeave</h1>
-                            <div className="empty-search-bar" onClick={() => fileInputRef.current.click()}>
-                                <FaFilePdf className="search-icon" />
-                                <span>무엇을 알고 싶으세요? PDF 업로드하기</span>
-                                <div className="search-actions">
-                                    <FaPaperPlane />
-                                </div>
-                            </div>
-                            <div className="suggestion-chips">
-                                <div className="chip">문서 요약하기</div>
-                                <div className="chip">핵심 키워드 추출</div>
-                                <div className="chip">번역 및 분석</div>
-                            </div>
-                        </div>
+                        <EmptyState onUploadClick={() => fileInputRef.current.click()} />
                     ) : (
                         <div className="message-list">
-                            {messages.map((msg, index) => {
-                                const isStreamingMessage = msg.isStreaming && isLoading;
-                                const rawContent = msg.content || '';
-                                const htmlContent = marked.parse(rawContent);
-
-                                return (
-                                    <div key={index} className={`message-row ${msg.role}`}>
-                                        <div className="message-container">
-                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain /></div>}
-                                            <div className="message-content">
-                                                <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
-                                                <div
-                                                    className="markdown-content"
-                                                    dangerouslySetInnerHTML={{ __html: htmlContent }}
-                                                />
-                                                {isStreamingMessage && <span className="typing-cursor">●</span>}
-
-                                                {msg.role === 'ai' && !isStreamingMessage && (
-                                                    <div className="ai-response-footer">
-                                                        <div className="response-divider"></div>
-                                                        <div className="footer-actions">
-                                                            <div className="feedback-buttons">
-                                                                <button className="icon-action-btn" onClick={() => handleFeedback('like')} title="좋아요">
-                                                                    <FaRegThumbsUp />
-                                                                </button>
-                                                                <button className="icon-action-btn" onClick={() => handleFeedback('dislike')} title="싫어요">
-                                                                    <FaRegThumbsDown />
-                                                                </button>
-                                                            </div>
-                                                            <button className="icon-action-btn" onClick={() => handleCopy(rawContent)} title="복사하기">
-                                                                <FaRegCopy />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {messages.map((msg, index) => (
+                                <ChatMessage
+                                    key={index}
+                                    message={msg}
+                                    isLoading={isLoading}
+                                    onCopy={handleCopy}
+                                    onFeedback={handleFeedback}
+                                />
+                            ))}
                             <div ref={messagesEndRef} />
                         </div>
                     )}
                 </div>
 
                 {currentRoomId && (
-                    <div className="input-container">
-                        <div className="input-wrapper">
-                            <button className="file-btn" onClick={() => fileInputRef.current.click()}
-                                    disabled={isProcessing}>
-                                <FaPlus size={16} />
-                            </button>
-                            <textarea
-                                ref={textareaRef}
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder={isProcessing ? "문서를 분석 중입니다. 잠시만 기다려주세요..." : "무엇을 알고 싶으세요?"}
-                                disabled={isLoading || isProcessing}
-                                rows={1}
-                            />
-                            <button className="send-btn" onClick={handleSend}
-                                    disabled={isLoading || !input.trim() || isProcessing}>
-                                <FaPaperPlane size={16} />
-                            </button>
-                        </div>
-                        <div className="footer-note">AI는 실수를 할 수 있습니다. 중요한 정보를 확인하세요.</div>
-                    </div>
+                    <ChatInput
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onSend={handleSend}
+                        onKeyDown={handleKeyDown}
+                        onFileClick={() => fileInputRef.current.click()}
+                        isLoading={isLoading}
+                        isProcessing={isProcessing}
+                    />
                 )}
             </div>
+
+            <input
+                type="file"
+                accept=".pdf"
+                ref={fileInputRef}
+                onChange={handleUpload}
+                style={{ display: 'none' }}
+            />
         </div>
     );
 }
