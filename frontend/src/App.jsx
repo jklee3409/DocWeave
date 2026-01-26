@@ -11,6 +11,7 @@ function App() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [uploadStatus, setUploadStatus] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -29,6 +30,7 @@ function App() {
             fetchMessages(currentRoomId);
         } else {
             setMessages([]);
+            setIsProcessing(false);
         }
     }, [currentRoomId]);
 
@@ -43,7 +45,7 @@ function App() {
     }, [currentRoomId, isLoading]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
     }, [messages]);
 
     useEffect(() => {
@@ -53,11 +55,34 @@ function App() {
         }
     }, [input]);
 
+    useEffect(() => {
+        if (messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg.role === 'ai') {
+                if (lastMsg.content.includes('분석을 시작합니다')) {
+                    setIsProcessing(true);
+                    setUploadStatus('uploading');
+                } else if (lastMsg.content.includes('분석이 완료되었습니다')) {
+                    setIsProcessing(false);
+                    setUploadStatus('done');
+                    setTimeout(() => setUploadStatus(null), 3000);
+                } else if (lastMsg.content.includes('오류가 발생했습니다')) {
+                    setIsProcessing(false);
+                    setUploadStatus(null);
+                }
+            } else {
+                setIsProcessing(false);
+            }
+        }
+    }, [messages]);
+
     const fetchRooms = async () => {
         try {
             const res = await axios.get('http://localhost:8080/api/doc/rooms');
             setRooms(res.data.data);
-        } catch (err) { console.error("Failed to fetch rooms", err); }
+        } catch (err) {
+            console.error("Failed to fetch rooms", err);
+        }
     };
 
     const fetchMessages = async (roomId, isSilent = false) => {
@@ -70,7 +95,9 @@ function App() {
                 if (isSilent && prev.length === res.data.data.length) return prev;
                 return res.data.data;
             });
-        } catch (err) { console.error("Failed to fetch messages", err); }
+        } catch (err) {
+            console.error("Failed to fetch messages", err);
+        }
     };
 
     const handleUpload = async (e) => {
@@ -78,13 +105,14 @@ function App() {
         if (!selectedFile) return;
 
         setUploadStatus('uploading');
+        setIsProcessing(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
 
         try {
             if (currentRoomId) {
                 await axios.post(`http://localhost:8080/api/doc/rooms/${currentRoomId}/files`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
+                    headers: {'Content-Type': 'multipart/form-data'}
                 });
                 fetchMessages(currentRoomId);
 
@@ -95,19 +123,17 @@ function App() {
                 });
             } else {
                 const res = await axios.post('http://localhost:8080/api/doc/rooms', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
+                    headers: {'Content-Type': 'multipart/form-data'}
                 });
                 const newRoom = res.data.data;
                 setRooms([newRoom, ...rooms]);
                 setCurrentRoomId(newRoom.id);
             }
-            setUploadStatus('done');
-            setTimeout(() => setUploadStatus(null), 3000);
-
         } catch (error) {
             console.error(error);
             alert('업로드 요청 실패');
             setUploadStatus(null);
+            setIsProcessing(false);
         } finally {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
@@ -148,7 +174,7 @@ function App() {
     };
 
     const handleSend = async () => {
-        if (!input.trim() || !currentRoomId) return;
+        if (!input.trim() || !currentRoomId || isProcessing) return;
 
         const userMessage = input;
         setInput('');
@@ -156,8 +182,8 @@ function App() {
 
         setMessages(prev => [
             ...prev,
-            { role: 'user', content: userMessage },
-            { role: 'ai', content: '', isStreaming: true }
+            {role: 'user', content: userMessage},
+            {role: 'ai', content: '', isStreaming: true}
         ]);
 
         setRooms(prevRooms => {
@@ -214,17 +240,27 @@ function App() {
         try {
             await axios.delete(`http://localhost:8080/api/doc/rooms/${roomId}`);
             setRooms(prev => prev.filter(room => room.id !== roomId));
-            if (currentRoomId === roomId) { setCurrentRoomId(null); setMessages([]); }
-        } catch (error) { alert("삭제 실패"); }
+            if (currentRoomId === roomId) {
+                setCurrentRoomId(null);
+                setMessages([]);
+            }
+        } catch (error) {
+            alert("삭제 실패");
+        }
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
     };
 
     const handleNewChatClick = () => {
         setCurrentRoomId(null);
-        setTimeout(() => { fileInputRef.current.click(); }, 0);
+        setTimeout(() => {
+            fileInputRef.current.click();
+        }, 0);
     };
 
     return (
@@ -232,41 +268,44 @@ function App() {
             <div className="sidebar">
                 <div className="sidebar-header">
                     <div className="sidebar-brand">
-                        <FaBrain /> <span>DocWeave</span>
+                        <FaBrain/> <span>DocWeave</span>
                     </div>
                 </div>
                 <button className="new-chat-btn" onClick={handleNewChatClick}>
-                    <FaPlus className="btn-icon" /> <span>New Chat</span>
+                    <FaPlus className="btn-icon"/> <span>New Chat</span>
                 </button>
                 <div className="room-list">
                     {rooms.map(room => (
-                        <div key={room.id} className={`room-item ${currentRoomId === room.id ? 'active' : ''}`} onClick={() => setCurrentRoomId(room.id)}>
-                            <FaRegCommentDots className="room-icon" />
+                        <div key={room.id} className={`room-item ${currentRoomId === room.id ? 'active' : ''}`}
+                             onClick={() => setCurrentRoomId(room.id)}>
+                            <FaRegCommentDots className="room-icon"/>
                             <span className="room-item-title">{room.title}</span>
-                            <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash size={10} /></button>
+                            <button className="delete-room-btn" onClick={(e) => handleDeleteRoom(e, room.id)}><FaTrash
+                                size={10}/></button>
                         </div>
                     ))}
                 </div>
-                <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} />
+                <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleUpload} style={{display: 'none'}}/>
 
                 <div className="sidebar-footer">
-                    <div className="footer-item"><FaGlobe /> <span>Explore</span></div>
-                    <div className="footer-item"><FaUser /> <span>Profile</span></div>
+                    <div className="footer-item"><FaGlobe/> <span>Explore</span></div>
+                    <div className="footer-item"><FaUser/> <span>Profile</span></div>
                 </div>
             </div>
 
             <div className="main-content">
                 <header className="app-header">
-                    {currentRoomId && <span className="room-title-display">{rooms.find(r => r.id === currentRoomId)?.title}</span>}
+                    {currentRoomId &&
+                        <span className="room-title-display">{rooms.find(r => r.id === currentRoomId)?.title}</span>}
                     {uploadStatus === 'uploading' && (
                         <div className="status-badge uploading">
-                            <FaSpinner className="spin-icon" />
+                            <FaSpinner className="spin-icon"/>
                             <span>Processing Document...</span>
                         </div>
                     )}
                     {uploadStatus === 'done' && (
                         <div className="status-badge done">
-                            <FaCheckCircle />
+                            <FaCheckCircle/>
                             <span>Ready</span>
                         </div>
                     )}
@@ -276,14 +315,14 @@ function App() {
                     {!currentRoomId ? (
                         <div className="empty-state">
                             <div className="logo-wrapper">
-                                <FaBrain className="logo-large" />
+                                <FaBrain className="logo-large"/>
                             </div>
                             <h1 className="empty-title">DocWeave</h1>
                             <div className="empty-search-bar" onClick={() => fileInputRef.current.click()}>
-                                <FaFilePdf className="search-icon" />
+                                <FaFilePdf className="search-icon"/>
                                 <span>무엇을 알고 싶으세요? PDF 업로드하기</span>
                                 <div className="search-actions">
-                                    <FaPaperPlane />
+                                    <FaPaperPlane/>
                                 </div>
                             </div>
                             <div className="suggestion-chips">
@@ -302,12 +341,13 @@ function App() {
                                 return (
                                     <div key={index} className={`message-row ${msg.role}`}>
                                         <div className="message-container">
-                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain /></div>}
+                                            {msg.role === 'ai' && <div className="avatar ai"><FaBrain/></div>}
                                             <div className="message-content">
-                                                <div className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
+                                                <div
+                                                    className="user-name">{msg.role === 'ai' ? 'DocWeave' : 'You'}</div>
                                                 <div
                                                     className="markdown-content"
-                                                    dangerouslySetInnerHTML={{ __html: htmlContent }}
+                                                    dangerouslySetInnerHTML={{__html: htmlContent}}
                                                 />
                                                 {isStreamingMessage && <span className="typing-cursor">●</span>}
                                             </div>
@@ -315,7 +355,7 @@ function App() {
                                     </div>
                                 );
                             })}
-                            <div ref={messagesEndRef} />
+                            <div ref={messagesEndRef}/>
                         </div>
                     )}
                 </div>
@@ -323,20 +363,22 @@ function App() {
                 {currentRoomId && (
                     <div className="input-container">
                         <div className="input-wrapper">
-                            <button className="file-btn" onClick={() => fileInputRef.current.click()}>
-                                <FaPlus size={16} />
+                            <button className="file-btn" onClick={() => fileInputRef.current.click()}
+                                    disabled={isProcessing}>
+                                <FaPlus size={16}/>
                             </button>
                             <textarea
                                 ref={textareaRef}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="무엇을 알고 싶으세요?"
-                                disabled={isLoading}
+                                placeholder={isProcessing ? "문서를 분석 중입니다. 잠시만 기다려주세요..." : "무엇을 알고 싶으세요?"}
+                                disabled={isLoading || isProcessing}
                                 rows={1}
                             />
-                            <button className="send-btn" onClick={handleSend} disabled={isLoading || !input.trim()}>
-                                <FaPaperPlane size={16} />
+                            <button className="send-btn" onClick={handleSend}
+                                    disabled={isLoading || !input.trim() || isProcessing}>
+                                <FaPaperPlane size={16}/>
                             </button>
                         </div>
                         <div className="footer-note">AI는 실수를 할 수 있습니다. 중요한 정보를 확인하세요.</div>
