@@ -325,6 +325,7 @@ body {
 
 .message-row.ai .message-content {
   padding-top: 4px;
+  max-width: 680px;
 }
 
 .user-name { display: none; }
@@ -334,12 +335,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 680px;
 }
 
 .response-divider {
   height: 1px;
   background: linear-gradient(to right, #333, transparent);
-  width: 100%;
+  width: 680px;
 }
 
 .footer-actions {
