@@ -2,7 +2,6 @@ package com.docweave.server.doc.service.component;
 
 import com.docweave.server.auth.entity.User;
 import com.docweave.server.auth.repository.UserRepository;
-import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
@@ -32,8 +31,7 @@ public class ChatDomainManager {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public List<ChatRoomDto> getAllChatRooms() {
-        Long userId = SecurityUtil.getCurrentUserId();
+    public List<ChatRoomDto> getAllChatRooms(Long userId) {
         return chatRoomRepository.findAllByUserIdOrderByLastActiveAtDesc(userId).stream()
                 .map(room -> ChatRoomDto.builder()
                         .id(room.getId())
@@ -53,8 +51,7 @@ public class ChatDomainManager {
                 .collect(Collectors.toList());
     }
 
-    public ChatRoom createChatRoomEntity(String title) {
-        Long userId = SecurityUtil.getCurrentUserId();
+    public ChatRoom createChatRoomEntity(String title, Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
@@ -73,8 +70,7 @@ public class ChatDomainManager {
                 .build());
     }
 
-    public ChatRoom findChatRoomById(Long roomId) {
-        Long userId = SecurityUtil.getCurrentUserId();
+    public ChatRoom findChatRoomById(Long userId, Long roomId) {
         return chatRoomRepository.findByIdAndUserId(roomId, userId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
     }
@@ -93,8 +89,8 @@ public class ChatDomainManager {
         return chatHistoryList;
     }
 
-    public void deleteChatRoom(Long roomId) {
-        ChatRoom chatRoom = findChatRoomById(roomId);
+    public void deleteChatRoom(Long userId, Long roomId) {
+        ChatRoom chatRoom = findChatRoomById(userId, roomId);
         chatRoomRepository.delete(chatRoom);
     }
 }

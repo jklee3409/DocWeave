@@ -1,6 +1,5 @@
 package com.docweave.server.doc.service.component;
 
-import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.entity.DocContent;
 import com.docweave.server.doc.exception.AiProcessingException;
@@ -42,9 +41,7 @@ public class RagProcessor {
 
     private static final double SIMILARITY_THRESHOLD = 0.4;
 
-    public String executeRag(Long roomId, String message, String conversationHistory, StopWatch stopWatch) {
-        Long userId = SecurityUtil.getCurrentUserId();
-
+    public String executeRag(Long userId, Long roomId, String message, String conversationHistory, StopWatch stopWatch) {
         // Vector Search: 질문과 유사한 'Child' 청크 검색 (사용자 격리 적용)
         List<Document> similarChildren = vectorStore.similaritySearch(
                 SearchRequest.builder()

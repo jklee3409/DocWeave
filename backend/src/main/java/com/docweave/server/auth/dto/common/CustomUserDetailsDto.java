@@ -2,6 +2,7 @@ package com.docweave.server.auth.dto.common;
 
 import com.docweave.server.auth.entity.User;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -10,33 +11,34 @@ import java.util.Collection;
 import java.util.Collections;
 
 @Getter
+@RequiredArgsConstructor
 public class CustomUserDetailsDto implements UserDetails {
 
-    private final Long id;
-    private final String email;
-    private final String password;
-    private final Collection<? extends GrantedAuthority> authorities;
+    private final User user;
 
-    public CustomUserDetailsDto(User user) {
-        this.id = user.getId();
-        this.email = user.getEmail();
-        this.password = user.getPassword();
-        this.authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+    public Long getId() {
+        return user.getId();
+    }
+
+    public String getEmail() {
+        return user.getEmail();
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return authorities;
+        return Collections.singleton(
+                new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+        );
     }
 
     @Override
     public String getPassword() {
-        return password;
+        return user.getPassword();
     }
 
     @Override
     public String getUsername() {
-        return email;
+        return user.getEmail();
     }
 
     @Override

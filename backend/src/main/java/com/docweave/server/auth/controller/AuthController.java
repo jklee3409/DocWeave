@@ -1,13 +1,14 @@
 package com.docweave.server.auth.controller;
 
+import com.docweave.server.auth.dto.common.CustomUserDetailsDto;
 import com.docweave.server.auth.dto.request.LoginRequestDto;
 import com.docweave.server.auth.dto.request.RefreshTokenRequestDto;
 import com.docweave.server.auth.dto.request.SignupRequestDto;
 import com.docweave.server.auth.dto.response.TokenResponseDto;
-import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.auth.service.AuthService;
 import com.docweave.server.common.dto.BaseResponseDto;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -30,10 +31,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public BaseResponseDto<Void> logout(@RequestHeader("Authorization") String authHeader) {
-        Long userId = SecurityUtil.getCurrentUserId();
+    public BaseResponseDto<Void> logout(
+            @AuthenticationPrincipal CustomUserDetailsDto customUserDetailsDto,
+            @RequestHeader("Authorization") String authHeader
+    ) {
         String token = authHeader.substring(7);
-        authService.logout(userId, token);
+        authService.logout(customUserDetailsDto.getId(), token);
         return BaseResponseDto.voidSuccess();
     }
 

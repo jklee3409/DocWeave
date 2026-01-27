@@ -9,10 +9,10 @@ import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 
 public interface RagService {
-    List<ChatRoomDto> getChatRooms();
+    List<ChatRoomDto> getChatRooms(Long userId);
     List<ChatMessageDto> getChatMessages(Long roomId);
-    ChatRoomDto createChatRoom(MultipartFile file);
-    ChatResponseDto ask(Long roomId, ChatRequestDto requestDto);
-    void addDocumentToRoom(Long roomId, MultipartFile file);
-    void deleteChatRoom(Long roomId);
+    ChatRoomDto createChatRoom(Long userId, MultipartFile file);
+    ChatResponseDto ask(Long userId, Long roomId, ChatRequestDto requestDto);
+    void addDocumentToRoom(Long userId, Long roomId, MultipartFile file);
+    void deleteChatRoom(Long userId, Long roomId);
 }

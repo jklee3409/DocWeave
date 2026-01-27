@@ -39,8 +39,8 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChatRoomDto> getChatRooms() {
-        return chatDomainManager.getAllChatRooms();
+    public List<ChatRoomDto> getChatRooms(Long userId) {
+        return chatDomainManager.getAllChatRooms(userId);
     }
 
     @Override
@@ -51,12 +51,12 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional
-    public ChatRoomDto createChatRoom(MultipartFile file) {
+    public ChatRoomDto createChatRoom(Long userId, MultipartFile file) {
         fileHandler.validateFile(file);
 
         try {
             // DB에 채팅방 생성
-            ChatRoom chatRoom = chatDomainManager.createChatRoomEntity(file.getOriginalFilename());
+            ChatRoom chatRoom = chatDomainManager.createChatRoomEntity(file.getOriginalFilename(), userId);
 
             // 파일 메타데이터 RDB 저장
             ChatDocument chatDocument = chatDomainManager.createChatDocument(chatRoom, file.getOriginalFilename());
@@ -88,9 +88,9 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional
-    public void addDocumentToRoom(Long roomId, MultipartFile file) {
+    public void addDocumentToRoom(Long userId, Long roomId, MultipartFile file) {
         fileHandler.validateFile(file);
-        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId);
+        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId, userId);
 
         chatDomainManager.updateLastActiveAt(chatRoom);
 
@@ -122,12 +122,12 @@ public class RagServiceImpl implements RagService {
 
     @Override
     @Transactional
-    public ChatResponseDto ask(Long roomId, ChatRequestDto requestDto) {
+    public ChatResponseDto ask(Long userId, Long roomId, ChatRequestDto requestDto) {
         // 성능 측정을 위한 StopWatch 시작
         StopWatch stopWatch = new StopWatch("RAG Performance Check - Room " + roomId);
 
         stopWatch.start("1. Basic Setup & Retrieval");
-        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId);
+        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId, userId);
 
         chatDomainManager.updateLastActiveAt(chatRoom);
 
@@ -148,7 +148,7 @@ public class RagServiceImpl implements RagService {
                     .collect(Collectors.joining("\n"));
 
             // RagProcessor 호출 - 임베딩 검색, LLM 응답 생성, 검증 포함
-            String rawAnswer = ragProcessor.executeRag(roomId, requestDto.getMessage(), conversationHistory, stopWatch);
+            String rawAnswer = ragProcessor.executeRag(userId, roomId, requestDto.getMessage(), conversationHistory, stopWatch);
 
             log.info(stopWatch.prettyPrint());
 
@@ -174,7 +174,7 @@ public class RagServiceImpl implements RagService {
     }
 
     @Override
-    public void deleteChatRoom(Long roomId) {
-        chatDomainManager.deleteChatRoom(roomId);
+    public void deleteChatRoom(Long userId, Long roomId) {
+        chatDomainManager.deleteChatRoom(userId, roomId);
     }
 }
