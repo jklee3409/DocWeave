@@ -68,11 +68,14 @@ public class DocumentProcessor {
             List<Document> parentDocs = parentSplitter.apply(rawDocuments);
             List<Document> childDocsToEmbed = new ArrayList<>();
 
+            Long userId = chatDocument.getChatRoom().getUser().getId();
+
             for (Document pDoc : parentDocs) {
                 // Parent RDB 저장
                 int pageNum = (int) pDoc.getMetadata().getOrDefault("page_number", 0);
                 DocContent savedParent = docContentRepository.save(DocContent.builder()
                         .chatDocument(chatDocument)
+                        .user(chatDocument.getChatRoom().getUser())
                         .content(pDoc.getText())
                         .pageNumber(pageNum)
                         .build());
@@ -84,6 +87,7 @@ public class DocumentProcessor {
                 for (Document cDoc : childDocs) {
                     cDoc.getMetadata().put("parent_id", savedParent.getId());
                     cDoc.getMetadata().put("roomId", request.getRoomId());
+                    cDoc.getMetadata().put("userId", userId);
                     cDoc.getMetadata().put("source_file", request.getOriginalFileName());
                     cDoc.getMetadata().put("page_number", pageNum);
                 }

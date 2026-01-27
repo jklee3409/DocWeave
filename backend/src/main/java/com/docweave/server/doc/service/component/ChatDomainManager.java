@@ -1,5 +1,8 @@
 package com.docweave.server.doc.service.component;
 
+import com.docweave.server.auth.entity.User;
+import com.docweave.server.auth.repository.UserRepository;
+import com.docweave.server.auth.security.SecurityUtil;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;
@@ -26,10 +29,12 @@ public class ChatDomainManager {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatDocumentRepository chatDocumentRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<ChatRoomDto> getAllChatRooms() {
-        return chatRoomRepository.findAllByOrderByLastActiveAtDesc().stream()
+        Long userId = SecurityUtil.getCurrentUserId();
+        return chatRoomRepository.findAllByUserIdOrderByLastActiveAtDesc(userId).stream()
                 .map(room -> ChatRoomDto.builder()
                         .id(room.getId())
                         .title(room.getTitle())
@@ -49,7 +54,12 @@ public class ChatDomainManager {
     }
 
     public ChatRoom createChatRoomEntity(String title) {
+        Long userId = SecurityUtil.getCurrentUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
         return chatRoomRepository.save(ChatRoom.builder()
+                .user(user)
                 .title(title)
                 .lastActiveAt(LocalDateTime.now())
                 .build());
@@ -64,7 +74,8 @@ public class ChatDomainManager {
     }
 
     public ChatRoom findChatRoomById(Long roomId) {
-        return chatRoomRepository.findById(roomId)
+        Long userId = SecurityUtil.getCurrentUserId();
+        return chatRoomRepository.findByIdAndUserId(roomId, userId)
                 .orElseThrow(() -> new ChatRoomFindingException(ErrorCode.CHATROOM_NOT_FOUND));
     }
 
