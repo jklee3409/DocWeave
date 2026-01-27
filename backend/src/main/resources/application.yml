@@ -67,6 +67,12 @@ spring:
 server:
   port: 8080
 
+# JWT
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-validity: 3600000  # 1 hour in milliseconds
+  refresh-token-validity: 604800000  # 7 days in milliseconds
+
 # CORS
 docweave:
   cors:
