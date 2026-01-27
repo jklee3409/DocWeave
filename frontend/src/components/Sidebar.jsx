@@ -1,6 +1,9 @@
-import { FaBrain, FaPlus, FaRegCommentDots, FaTrash, FaGlobe, FaUser } from 'react-icons/fa';
+import { FaBrain, FaPlus, FaRegCommentDots, FaTrash, FaSignOutAlt, FaUser } from 'react-icons/fa';
+import { authService } from '../services/authService';
 
-function Sidebar({ rooms, currentRoomId, onRoomSelect, onNewChat, onDeleteRoom, fileInputRef }) {
+function Sidebar({ rooms, currentRoomId, onRoomSelect, onNewChat, onDeleteRoom, onLogout, fileInputRef }) {
+    const user = authService.getUser();
+
     return (
         <div className="sidebar">
             <div className="sidebar-header">
@@ -30,8 +33,12 @@ function Sidebar({ rooms, currentRoomId, onRoomSelect, onNewChat, onDeleteRoom, 
                 ))}
             </div>
             <div className="sidebar-footer">
-                <div className="footer-item"><FaGlobe /> <span>Explore</span></div>
-                <div className="footer-item"><FaUser /> <span>Profile</span></div>
+                <div className="footer-item">
+                    <FaUser /> <span>{user?.name || 'User'}</span>
+                </div>
+                <div className="footer-item" onClick={onLogout} style={{ cursor: 'pointer' }}>
+                    <FaSignOutAlt /> <span>로그아웃</span>
+                </div>
             </div>
         </div>
     );

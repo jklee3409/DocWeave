@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '../services/api';
 
-export function useChatRoom() {
+export function useChatRoom(isAuthenticated) {
     const [rooms, setRooms] = useState([]);
     const [currentRoomId, setCurrentRoomId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -11,8 +11,10 @@ export function useChatRoom() {
     const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
-        fetchRooms();
-    }, []);
+        if (isAuthenticated) {
+            fetchRooms();
+        }
+    }, [isAuthenticated]);
 
     useEffect(() => {
         if (currentRoomId) {
@@ -60,8 +62,12 @@ export function useChatRoom() {
             const data = await api.fetchRooms();
             setRooms(data);
         } catch (err) {
-            console.error(err);
-            toast.error("채팅방 목록을 불러오지 못했습니다.");
+            // 404는 채팅방이 없는 초기 상태일 수 있으므로 에러 토스트를 띄우지 않음
+            if (err.message.includes('CHATROOM_NOT_FOUND')) {
+                setRooms([]);
+            } else {
+                toast.error(err.message || "채팅방 목록을 불러오지 못했습니다.");
+            }
         }
     };
 
@@ -76,7 +82,7 @@ export function useChatRoom() {
                 return data;
             });
         } catch (err) {
-            console.error(err);
+            toast.error(err.message || "메시지를 불러오는 중 오류가 발생했습니다.");
         }
     };
 

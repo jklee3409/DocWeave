@@ -3,14 +3,17 @@ import { marked } from 'marked';
 import { Toaster, toast } from 'react-hot-toast';
 import { useChatRoom } from './hooks/useChatRoom';
 import { api } from './services/api';
+import { authService } from './services/authService';
 import Sidebar from './components/Sidebar';
 import ChatHeader from './components/ChatHeader';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import EmptyState from './components/EmptyState';
+import Auth from './pages/Auth';
 import './App.css';
 
 function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
     const {
         rooms,
         setRooms,
@@ -26,7 +29,7 @@ function App() {
         setIsProcessing,
         fetchMessages,
         moveRoomToTop
-    } = useChatRoom();
+    } = useChatRoom(isAuthenticated);
 
     const [input, setInput] = useState('');
     const messagesEndRef = useRef(null);
@@ -69,9 +72,8 @@ function App() {
             toast.success("PDF 분석을 시작합니다.");
 
         } catch (error) {
-            console.error(error);
             toast.dismiss(loadingToast);
-            toast.error("업로드 요청에 실패했습니다.");
+            toast.error("파일 업로드가 실패했습니다.");
             setUploadStatus(null);
             setIsProcessing(false);
         } finally {
@@ -131,8 +133,8 @@ function App() {
         try {
             const responseData = await api.sendMessage(currentRoomId, userMessage);
 
-            if (responseData && responseData.data) {
-                await animateTyping(responseData.data.answer);
+            if (responseData && responseData.answer) {
+                await animateTyping(responseData.answer);
             }
 
             setMessages(prev => {
@@ -145,22 +147,17 @@ function App() {
             });
 
         } catch (error) {
-            console.error("Chat error", error);
-            let errorMessage = "⚠️ **오류:** 응답을 처리할 수 없습니다.";
-            if (error.response?.data?.statusCode === 30003) {
-                errorMessage = "🚫 **[보안 경고]** 답변이 차단되었습니다.";
-            }
-
+            const errorMessage = "답변 생성 중 오류가 발생했습니다.";
             setMessages(prev => {
                 const newMessages = [...prev];
                 const lastMsg = newMessages[newMessages.length - 1];
                 if (lastMsg.role === 'ai') {
-                    lastMsg.content = errorMessage;
+                    lastMsg.content = `⚠️ **오류:** ${errorMessage}`;
                     lastMsg.isStreaming = false;
                 }
                 return newMessages;
             });
-            toast.error("답변 생성 중 오류가 발생했습니다.");
+            toast.error(errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -219,6 +216,33 @@ function App() {
         });
     };
 
+    const handleLoginSuccess = () => {
+        setIsAuthenticated(true);
+    };
+
+    const handleLogout = async () => {
+        try {
+            await authService.logout();
+            setIsAuthenticated(false);
+            setCurrentRoomId(null);
+            setMessages([]);
+            setRooms([]);
+            toast.success('로그아웃되었습니다.');
+        } catch (error) {
+            console.error('Logout error:', error);
+            toast.error('로그아웃 중 오류가 발생했습니다.');
+        }
+    };
+
+    if (!isAuthenticated) {
+        return (
+            <>
+                <Toaster position="top-center" />
+                <Auth onLoginSuccess={handleLoginSuccess} />
+            </>
+        );
+    }
+
     return (
         <div className="app-container">
             <Toaster position="top-center" />
@@ -229,6 +253,7 @@ function App() {
                 onRoomSelect={setCurrentRoomId}
                 onNewChat={handleNewChatClick}
                 onDeleteRoom={handleDeleteRoom}
+                onLogout={handleLogout}
                 fileInputRef={fileInputRef}
             />
 
