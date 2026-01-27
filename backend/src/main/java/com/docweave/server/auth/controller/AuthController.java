@@ -4,11 +4,10 @@ import com.docweave.server.auth.dto.request.LoginRequestDto;
 import com.docweave.server.auth.dto.request.RefreshTokenRequestDto;
 import com.docweave.server.auth.dto.request.SignupRequestDto;
 import com.docweave.server.auth.dto.response.TokenResponseDto;
-import com.docweave.server.auth.security.SecurityUtil;
+import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.auth.service.AuthService;
 import com.docweave.server.common.dto.BaseResponseDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

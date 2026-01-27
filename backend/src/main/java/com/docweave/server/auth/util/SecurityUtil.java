@@ -1,5 +1,6 @@
-package com.docweave.server.auth.security;
+package com.docweave.server.auth.util;
 
+import com.docweave.server.auth.dto.common.CustomUserDetailsDto;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -12,8 +13,8 @@ public class SecurityUtil {
         }
 
         Object principal = authentication.getPrincipal();
-        if (principal instanceof CustomUserDetails) {
-            return ((CustomUserDetails) principal).getId();
+        if (principal instanceof CustomUserDetailsDto) {
+            return ((CustomUserDetailsDto) principal).getId();
         } else if (principal instanceof Long) {
             return (Long) principal;
         } else if (principal instanceof String) {

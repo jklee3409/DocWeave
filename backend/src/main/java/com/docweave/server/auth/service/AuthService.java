@@ -5,7 +5,7 @@ import com.docweave.server.auth.dto.request.SignupRequestDto;
 import com.docweave.server.auth.dto.response.TokenResponseDto;
 import com.docweave.server.auth.entity.User;
 import com.docweave.server.auth.repository.UserRepository;
-import com.docweave.server.auth.security.JwtTokenProvider;
+import com.docweave.server.auth.util.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;

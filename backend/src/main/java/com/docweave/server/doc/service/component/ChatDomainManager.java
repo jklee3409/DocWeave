@@ -2,7 +2,7 @@ package com.docweave.server.doc.service.component;
 
 import com.docweave.server.auth.entity.User;
 import com.docweave.server.auth.repository.UserRepository;
-import com.docweave.server.auth.security.SecurityUtil;
+import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.dto.ChatMessageDto;
 import com.docweave.server.doc.dto.ChatRoomDto;

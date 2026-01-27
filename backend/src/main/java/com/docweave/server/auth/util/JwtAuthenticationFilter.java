@@ -1,5 +1,6 @@
-package com.docweave.server.auth.security;
+package com.docweave.server.auth.util;
 
+import com.docweave.server.auth.dto.common.CustomUserDetailsDto;
 import com.docweave.server.auth.entity.User;
 import com.docweave.server.auth.repository.UserRepository;
 import com.docweave.server.auth.service.TokenStorageService;
@@ -16,7 +17,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
 
 @Component
 @RequiredArgsConstructor
@@ -45,7 +45,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 User user = userRepository.findById(userId).orElse(null);
                 if (user != null) {
-                    CustomUserDetails userDetails = new CustomUserDetails(user);
+                    CustomUserDetailsDto userDetails = new CustomUserDetailsDto(user);
 
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());

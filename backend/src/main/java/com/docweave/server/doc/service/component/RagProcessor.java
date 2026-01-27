@@ -1,6 +1,6 @@
 package com.docweave.server.doc.service.component;
 
-import com.docweave.server.auth.security.SecurityUtil;
+import com.docweave.server.auth.util.SecurityUtil;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.entity.DocContent;
 import com.docweave.server.doc.exception.AiProcessingException;

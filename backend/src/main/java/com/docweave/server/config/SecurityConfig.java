@@ -1,6 +1,6 @@
 package com.docweave.server.config;
 
-import com.docweave.server.auth.security.JwtAuthenticationFilter;
+import com.docweave.server.auth.util.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

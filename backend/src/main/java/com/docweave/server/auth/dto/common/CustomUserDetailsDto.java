@@ -1,4 +1,4 @@
-package com.docweave.server.auth.security;
+package com.docweave.server.auth.dto.common;
 
 import com.docweave.server.auth.entity.User;
 import lombok.Getter;
@@ -10,14 +10,14 @@ import java.util.Collection;
 import java.util.Collections;
 
 @Getter
-public class CustomUserDetails implements UserDetails {
+public class CustomUserDetailsDto implements UserDetails {
 
     private final Long id;
     private final String email;
     private final String password;
     private final Collection<? extends GrantedAuthority> authorities;
 
-    public CustomUserDetails(User user) {
+    public CustomUserDetailsDto(User user) {
         this.id = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
