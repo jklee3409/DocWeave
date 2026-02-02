@@ -127,7 +127,7 @@ public class RagServiceImpl implements RagService {
         StopWatch stopWatch = new StopWatch("RAG Performance Check - Room " + roomId);
 
         stopWatch.start("1. Basic Setup & Retrieval");
-        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId, userId);
+        ChatRoom chatRoom = chatDomainManager.findChatRoomById(userId, roomId);
 
         chatDomainManager.updateLastActiveAt(chatRoom);
 
