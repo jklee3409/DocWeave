@@ -17,7 +17,7 @@ DocWeave는 고성능 Groq API와 로컬 환경에서 구동되는 임베딩 모
 *   **Backend:** Java 17, Spring Boot 3.5.10, Spring AI
 *   **Frontend:** React, Vite
 *   **AI Engine:** Groq API (Llama 3.3-70b-versatile), Ollama (bge-m3)
-*   **Database:** PostgreSQL (pgvector)
+*   **Database:** PostgreSQL / Qdrant
 *   **Infra:** Docker Compose
 
 ## 🚀 실행 방법
