@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # 1. Vector Storage (PostgreSQL + pgvector)
+  # 1. RDB
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     container_name: docweave-db
     environment:
       POSTGRES_USER: postgres
@@ -22,6 +22,20 @@ services:
     container_name: docweave-redis
     ports:
       - "6380:6379"
+    networks:
+      - docweave-net
+
+  # 3. Qdrant
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: docweave-qdrant
+    ports:
+      - "6333:6333" # HTTP API
+      - "6334:6334" # gRPC
+    environment:
+      - QDRANT+SERVICE+GRPC_PORT=6334
+    volumes:
+      - ./qdrant_data:/qdrant/storage
     networks:
       - docweave-net
 
