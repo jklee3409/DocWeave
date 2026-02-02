@@ -47,7 +47,7 @@ public class RagProcessor {
                 SearchRequest.builder()
                         .query(message)
                         .topK(2)
-                        .filterExpression("roomId == " + roomId + " && userId == " + userId)
+                        .filterExpression(String.format("roomId == '%s' && userId == '%s'", roomId, userId))
                         .build()
         );
 
