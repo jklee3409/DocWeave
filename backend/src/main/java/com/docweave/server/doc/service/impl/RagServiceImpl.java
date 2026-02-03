@@ -89,8 +89,9 @@ public class RagServiceImpl implements RagService {
     @Override
     @Transactional
     public void addDocumentToRoom(Long userId, Long roomId, MultipartFile file) {
+        log.info("[addDocumentToRoom] PDF 추가 시작. File Name: {}", file.getOriginalFilename());
         fileHandler.validateFile(file);
-        ChatRoom chatRoom = chatDomainManager.findChatRoomById(roomId, userId);
+        ChatRoom chatRoom = chatDomainManager.findChatRoomById(userId, roomId);
 
         chatDomainManager.updateLastActiveAt(chatRoom);
 
