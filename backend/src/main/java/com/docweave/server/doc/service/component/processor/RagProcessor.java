@@ -1,4 +1,4 @@
-package com.docweave.server.doc.service.component;
+package com.docweave.server.doc.service.component.processor;
 
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.entity.DocContent;

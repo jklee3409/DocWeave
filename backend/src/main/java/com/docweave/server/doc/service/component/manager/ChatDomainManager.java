@@ -1,4 +1,4 @@
-package com.docweave.server.doc.service.component;
+package com.docweave.server.doc.service.component.manager;
 
 import com.docweave.server.auth.entity.User;
 import com.docweave.server.auth.repository.UserRepository;

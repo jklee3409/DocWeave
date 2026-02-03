@@ -1,4 +1,4 @@
-package com.docweave.server.doc.service.component;
+package com.docweave.server.doc.service.component.handler;
 
 import com.docweave.server.common.constant.FileConstant;
 import com.docweave.server.common.exception.ErrorCode;

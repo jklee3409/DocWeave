@@ -2,7 +2,7 @@ package com.docweave.server.doc.service.queue;
 
 import com.docweave.server.common.constant.RedisConstant;
 import com.docweave.server.doc.dto.request.DocumentIngestionRequestDto;
-import com.docweave.server.doc.service.component.DocumentProcessor;
+import com.docweave.server.doc.service.component.processor.DocumentProcessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
