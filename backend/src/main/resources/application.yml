@@ -74,10 +74,10 @@ jwt:
   access-token-validity: 3600000  # 1 hour in milliseconds
   refresh-token-validity: 604800000  # 7 days in milliseconds
 
-# CORS
+# CORS & Tika
 docweave:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
-  optimization:
-    enabled: false
+  tika:
+    base-url: http://localhost:9998
