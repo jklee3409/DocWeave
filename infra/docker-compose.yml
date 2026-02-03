@@ -39,6 +39,15 @@ services:
     networks:
       - docweave-net
 
+  # 4. Apache Tika
+  tika:
+    image: apache/tika:latest-full
+    container_name: docweave-tika
+    ports:
+      - "9998:9998"
+    networks:
+      - docweave-net
+
 networks:
   docweave-net:
     driver: bridge
