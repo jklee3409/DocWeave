@@ -3,6 +3,7 @@ package com.docweave.server.doc.service.component.parser;
 import com.docweave.server.common.exception.ErrorCode;
 import com.docweave.server.doc.exception.FileHandlingException;
 import java.io.File;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.util.retry.Retry;
 
 @Slf4j
 @Component
@@ -41,14 +43,17 @@ public class TikaClient {
             String response = webClient.post()
                     .uri("/tika/form")
                     .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .accept(MediaType.TEXT_HTML)
+                    .accept(MediaType.TEXT_HTML, MediaType.TEXT_PLAIN)
+                    .header("X-Tika-PDFextractInlineImages", "true")
+                    .header("X-Tika-OCRtimeout", "300")
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()
                     .bodyToMono(String.class)
+                    .retryWhen(Retry.backoff(2, Duration.ofSeconds(2)))
                     .block();
 
             if (response == null || response.isBlank()) {
-                log.error("Tika Response is null or empty)");
+                log.error("Tika Response is null or empty");
                 throw new FileHandlingException(ErrorCode.FILE_EMPTY);
             }
 
