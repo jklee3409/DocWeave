@@ -16,7 +16,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +63,7 @@ public class DocumentProcessor {
             String markdownContent = htmlToMarkdownConverter.convert(xhtmlContent);
 
             if (markdownContent == null || markdownContent.trim().isEmpty()) {
-                log.warn("추출된 텍스트가 없습니다. docId: {}", request.getDocumentId());
+                log.warn("Extracted text is empty. Tika OCR Failed. docId: {}", request.getDocumentId());
                 handleEmptyContent(chatDocument, request);
                 return;
             }
@@ -74,7 +73,7 @@ public class DocumentProcessor {
                     "roomId", request.getRoomId()
             ));
 
-            List<Document> rawDocuments = Collections.singletonList(rawDocument);
+            List<Document> rawDocuments = List.of(rawDocument);
 
             // 3. Chunking
             TokenTextSplitter parentSplitter = new TokenTextSplitter(EmbeddingConstant.PARENT_CHUNK_SIZE, 100, 10, 1000, true);
@@ -94,26 +93,25 @@ public class DocumentProcessor {
 
                 // Child Chunking
                 TokenTextSplitter childSplitter = new TokenTextSplitter(EmbeddingConstant.CHILD_CHUNK_SIZE, 50, 10, 100, true);
-                List<Document> childDocs = childSplitter.apply(Collections.singletonList(pDoc));
+                List<Document> childDocs = childSplitter.apply(List.of(pDoc));
 
-                for (Document cDoc : childDocs) {
+                childDocs.forEach(cDoc -> {
                     cDoc.getMetadata().put("parent_id", savedParent.getId());
                     cDoc.getMetadata().put("roomId", request.getRoomId());
                     cDoc.getMetadata().put("userId", userId);
                     cDoc.getMetadata().put("source_file", request.getOriginalFileName());
                     cDoc.getMetadata().put("page_number", 0);
-                }
+                });
                 childDocsToEmbed.addAll(childDocs);
             }
 
             if (!childDocsToEmbed.isEmpty()) {
                 vectorStore.add(childDocsToEmbed);
-
                 chatDocument.setStatus(ChatDocument.ProcessingStatus.COMPLETED);
                 sendSystemMessage(request.getRoomId(), "✅ **" + request.getOriginalFileName() + "** 분석이 완료되었습니다. 이제 질문하실 수 있습니다!");
 
             } else {
-                log.warn("청킹된 문서가 없습니다. docId: {}", request.getDocumentId());
+                log.warn("No chunks created from document. docId: {}", request.getDocumentId());
                 handleEmptyContent(chatDocument, request);
             }
 
@@ -135,7 +133,7 @@ public class DocumentProcessor {
     private void handleEmptyContent(ChatDocument chatDocument, DocumentIngestionRequestDto request) {
         chatDocument.setStatus(ChatDocument.ProcessingStatus.COMPLETED);
         sendSystemMessage(request.getRoomId(),
-                "⚠️ **" + request.getOriginalFileName() + "** 에서 텍스트를 추출하지 못했습니다.\n(손글씨나 흐릿한 이미지는 인식이 안 될 수 있습니다.)");
+                "⚠️ **" + request.getOriginalFileName() + "** 에서 텍스트를 추출하지 못했습니다.\n(암호화된 파일이거나 지원되지 않는 형식일 수 있습니다.)");
     }
 
     private void sendSystemMessage(Long roomId, String content) {
