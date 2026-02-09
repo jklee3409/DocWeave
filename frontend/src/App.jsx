@@ -40,6 +40,18 @@ function App() {
             breaks: true,
             gfm: true
         });
+
+        const handleAuthLogout = () => {
+            setIsAuthenticated(false);
+            setCurrentRoomId(null);
+            setMessages([]);
+            setRooms([]);
+        };
+
+        window.addEventListener('auth:logout', handleAuthLogout);
+        return () => {
+            window.removeEventListener('auth:logout', handleAuthLogout);
+        };
     }, []);
 
     useEffect(() => {
@@ -73,6 +85,7 @@ function App() {
 
         } catch (error) {
             toast.dismiss(loadingToast);
+            if (error.message === 'USER_LOGOUT') return;
             toast.error("파일 업로드가 실패했습니다.");
             setUploadStatus(null);
             setIsProcessing(false);
@@ -147,6 +160,8 @@ function App() {
             });
 
         } catch (error) {
+            if (error.message === 'USER_LOGOUT') return;
+
             const errorMessage = "답변 생성 중 오류가 발생했습니다.";
             setMessages(prev => {
                 const newMessages = [...prev];
@@ -175,6 +190,7 @@ function App() {
             }
             toast.success("채팅방이 삭제되었습니다.");
         } catch (error) {
+            if (error.message === 'USER_LOGOUT') return;
             toast.error("채팅방 삭제에 실패했습니다.");
         }
     };
@@ -223,14 +239,11 @@ function App() {
     const handleLogout = async () => {
         try {
             await authService.logout();
-            setIsAuthenticated(false);
-            setCurrentRoomId(null);
-            setMessages([]);
-            setRooms([]);
             toast.success('로그아웃되었습니다.');
         } catch (error) {
             console.error('Logout error:', error);
-            toast.error('로그아웃 중 오류가 발생했습니다.');
+            // 이미 세션이 만료된 경우일 수 있으므로 에러가 나도 클라이언트 로그아웃 진행
+            authService.clearTokens();
         }
     };
 
